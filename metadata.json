@@ -1,0 +1,6 @@
+{
+  "name": "VidyaKosh — Study Library & Reading Room Manager",
+  "description": "Complete library and study hall management system with real-time interactive seat board, locker assignment, fast fee collection with digital receipts, financial reports, and QR attendance tracking.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
