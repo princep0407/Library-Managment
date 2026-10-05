@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, UserPlus, CheckCircle2, ScanFace } from 'lucide-react';
+import { X, UserPlus, CheckCircle2, ScanFace, KeyRound } from 'lucide-react';
 import {
   Member,
   Seat,
@@ -9,6 +9,7 @@ import {
   PaymentMode,
 } from '../types';
 import { TODAY_STR } from '../data/initialData';
+import { FaceTemplateCaptureBox } from './FaceTemplateCaptureBox';
 
 interface NewAdmissionModalProps {
   isOpen: boolean;
@@ -72,22 +73,24 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('123456');
   const [examPrep, setExamPrep] = useState('UPSC CSE');
-  const [idProof, setIdProof] = useState('Aadhaar · ');
+  const [idProof, setIdProof] = useState('Aadhaar Verified');
   const [address, setAddress] = useState('');
   const [shift, setShift] = useState<ShiftType>('Full Day (24x7)');
   const [plan, setPlan] = useState<PlanType>('Monthly');
-  const [customMonths, setCustomMonths] = useState<number>(2);
+  const [customMonths] = useState<number>(2);
   const [seatAssignmentMode, setSeatAssignmentMode] = useState<'Auto' | 'Manual'>(
     preselectedSeatId ? 'Manual' : 'Auto'
   );
   const [seatId, setSeatId] = useState<string>(preselectedSeatId || '');
   const [lockerId, setLockerId] = useState<string>('');
   const [hourlyRate, setHourlyRate] = useState<number>(15);
+  const [faceTemplateId, setFaceTemplateId] = useState<string>('');
   const [collectFeeNow, setCollectFeeNow] = useState<boolean>(true);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('UPI');
   const [discount, setDiscount] = useState<number>(0);
-  const [transactionRef, setTransactionRef] = useState<string>('');
+  const [transactionRef] = useState<string>('');
 
   const vacantSeats = useMemo(
     () => seats.filter((s) => s.status === 'Vacant' || s.id === preselectedSeatId),
@@ -121,6 +124,13 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
         ? seatId || preselectedSeatId || null
         : null;
 
+    const finalFaceTemplateId =
+      faceTemplateId.trim() ||
+      `FACE-BIO-${nextMemberId.replace(/\D+/g, '')}-${Math.random()
+        .toString(16)
+        .substring(2, 6)
+        .toUpperCase()}`;
+
     const newMember: Member = {
       id: nextMemberId,
       name: name.trim(),
@@ -128,6 +138,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
       email:
         email.trim() ||
         `${name.trim().toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
+      password: password.trim() || '123456',
       examPrep: examPrep.trim() || 'Competitive Exams',
       plan,
       shift,
@@ -143,7 +154,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
       seatAssignmentMode,
       lockerId: lockerId || null,
       faceRegistered: true,
-      faceTemplateId: `FACE-BIO-${nextMemberId.replace(/\D+/g, '')}`,
+      faceTemplateId: finalFaceTemplateId,
       idProof: idProof.trim() || 'Aadhaar Verified',
       address: address.trim() || 'Local Study Hostel',
     };
@@ -171,13 +182,13 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/70 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white border border-stone-200 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-stone-900 text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-900 dark:bg-slate-950 text-white">
           <div className="flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-amber-400" />
             <h3 className="text-base font-bold">
-              New Student Admission & Face ID Enrollment
+              New Admission & Face Template Enrollment
             </h3>
             <span className="text-xs font-mono tabular-nums text-amber-400 font-semibold">
               · {nextMemberId}
@@ -185,16 +196,23 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-stone-400 hover:text-white rounded-lg transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5 max-h-[82vh] overflow-y-auto">
+          {/* Capture Face Template Section */}
+          <FaceTemplateCaptureBox
+            memberId={nextMemberId}
+            currentTemplateId={faceTemplateId}
+            onCaptureComplete={(newTemplateId) => setFaceTemplateId(newTemplateId)}
+          />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-stone-700 mb-1">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Student Full Name *
               </label>
               <input
@@ -203,12 +221,12 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                 placeholder="e.g., Aditya Narayan"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-700"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-stone-700 mb-1">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Mobile Number (10-digit) *
               </label>
               <input
@@ -217,18 +235,46 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                 placeholder="e.g., 9811445566"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-700"
+                className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-stone-700 mb-1">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Email Address (for Member Login)
+              </label>
+              <input
+                type="email"
+                placeholder="student@gmail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1">
+                <KeyRound className="w-3 h-3 text-indigo-500" />
+                <span>Member Login Password *</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Set password for student login"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Target Exam / Course
               </label>
               <select
                 value={examPrep}
                 onChange={(e) => setExamPrep(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
                 <option value="UPSC CSE">UPSC CSE</option>
                 <option value="SSC CGL">SSC CGL / CHSL</option>
@@ -243,7 +289,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-stone-700 mb-1">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Hourly Deduction Rate (₹/hr)
               </label>
               <input
@@ -252,25 +298,25 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                 max={100}
                 value={hourlyRate}
                 onChange={(e) => setHourlyRate(Number(e.target.value))}
-                className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white border border-stone-300 rounded-lg"
+                className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               />
             </div>
           </div>
 
           {/* Seat Assignment Policy (Auto 1-by-1 vs Manual) */}
-          <div className="pt-4 border-t border-stone-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-stone-700 mb-1">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Single-Floor Seat Assignment Policy
               </label>
-              <div className="flex gap-1 p-1 bg-stone-100 rounded-lg">
+              <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
                 <button
                   type="button"
                   onClick={() => setSeatAssignmentMode('Auto')}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     seatAssignmentMode === 'Auto'
-                      ? 'bg-indigo-700 text-white'
-                      : 'text-stone-600 hover:text-stone-900'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Auto 1-by-1 on Entry
@@ -280,8 +326,8 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                   onClick={() => setSeatAssignmentMode('Manual')}
                   className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     seatAssignmentMode === 'Manual'
-                      ? 'bg-indigo-700 text-white'
-                      : 'text-stone-600 hover:text-stone-900'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   Manual Fixed Seat
@@ -291,13 +337,13 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
 
             {seatAssignmentMode === 'Manual' ? (
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Pick Vacant Seat ({vacantSeats.length} Free on Single Floor)
                 </label>
                 <select
                   value={seatId || preselectedSeatId || ''}
                   onChange={(e) => setSeatId(e.target.value)}
-                  className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white border border-stone-300 rounded-lg"
+                  className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
                 >
                   <option value="">-- Choose Seat --</option>
                   {vacantSeats.map((s) => (
@@ -308,8 +354,8 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                 </select>
               </div>
             ) : (
-              <div className="p-2.5 bg-indigo-50/70 border border-indigo-200 rounded-lg text-xs text-indigo-950 flex items-center gap-2">
-                <ScanFace className="w-4 h-4 text-indigo-700 shrink-0" />
+              <div className="p-2.5 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-lg text-xs text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
+                <ScanFace className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                 <span>
                   Next vacant seat (S-01, S-02...) will automatically assign when student scans Gate QR + Face ID.
                 </span>
@@ -317,7 +363,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
             )}
 
             <div>
-              <label className="block text-xs font-medium text-stone-700 mb-1">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Study Shift Timing
               </label>
               <select
@@ -327,7 +373,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                   setShift(s);
                   setHourlyRate(SHIFT_HOURLY_RATE[s]);
                 }}
-                className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg"
+                className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
                 <option value="Full Day (24x7)">Full Day (24x7) — ₹15/hr</option>
                 <option value="Morning (6 AM - 2 PM)">Morning (6 AM - 2 PM) — ₹12/hr</option>
@@ -337,13 +383,13 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-stone-700 mb-1">
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Assign Vacant Locker ({vacantLockers.length} Available)
               </label>
               <select
                 value={lockerId}
                 onChange={(e) => setLockerId(e.target.value)}
-                className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white border border-stone-300 rounded-lg"
+                className="w-full px-3 py-2 text-xs font-mono tabular-nums bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
                 <option value="">-- No Locker Needed --</option>
                 {vacantLockers.map((l) => (
@@ -356,35 +402,35 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
           </div>
 
           {/* Initial Wallet Recharge */}
-          <div className="pt-4 border-t border-stone-200 space-y-3">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
             <label className="flex items-center justify-between cursor-pointer">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={collectFeeNow}
                   onChange={(e) => setCollectFeeNow(e.target.checked)}
-                  className="w-4 h-4 rounded border-stone-300 text-indigo-700"
+                  className="w-4 h-4 rounded border-slate-300 text-indigo-600"
                 />
-                <span className="text-xs font-semibold text-stone-900">
+                <span className="text-xs font-semibold text-slate-900 dark:text-white">
                   Add Initial Wallet Balance & Open Digital Receipt
                 </span>
               </div>
-              <span className="text-xs font-mono tabular-nums text-emerald-700 font-semibold">
+              <span className="text-xs font-mono tabular-nums text-emerald-700 dark:text-emerald-400 font-semibold">
                 Wallet Credit: ₹{(baseAmount - effectiveDiscount).toLocaleString('en-IN')}
               </span>
             </label>
 
             {collectFeeNow && (
-              <div className="p-4 bg-stone-50 border border-stone-200 rounded-lg space-y-3">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                       Recharge Package
                     </label>
                     <select
                       value={plan}
                       onChange={(e) => setPlan(e.target.value as PlanType)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-stone-300 rounded-lg"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
                     >
                       <option value="Monthly">Monthly Pack (₹{monthlyRate})</option>
                       <option value="Quarterly">Quarterly Pack (3x)</option>
@@ -393,10 +439,10 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                       Payment Mode
                     </label>
-                    <div className="flex gap-1 p-1 bg-white border border-stone-200 rounded-lg">
+                    <div className="flex gap-1 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
                       {(['UPI', 'Cash', 'Online'] as const).map((m) => (
                         <button
                           type="button"
@@ -404,8 +450,8 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                           onClick={() => setPaymentMode(m)}
                           className={`flex-1 py-1 text-xs font-medium rounded-md transition-colors ${
                             paymentMode === m
-                              ? 'bg-stone-900 text-white'
-                              : 'text-stone-600 hover:text-stone-900'
+                              ? 'bg-indigo-600 text-white'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                           }`}
                         >
                           {m}
@@ -415,7 +461,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-medium text-stone-600 mb-1">
+                    <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                       Discount (₹)
                     </label>
                     <input
@@ -424,16 +470,16 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
                       placeholder={String(autoDiscount)}
                       value={discount || ''}
                       onChange={(e) => setDiscount(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs font-mono tabular-nums bg-white border border-stone-300 rounded-lg"
+                      className="w-full px-3 py-1.5 text-xs font-mono tabular-nums bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
                     />
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between pt-2 border-t border-stone-200 text-xs font-mono tabular-nums">
-                  <span className="text-stone-600">
+                <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700 text-xs font-mono tabular-nums">
+                  <span className="text-slate-600 dark:text-slate-400">
                     Wallet Credit: ₹{baseAmount - effectiveDiscount} · Rate: ₹{hourlyRate}/hr
                   </span>
-                  <span className="text-sm font-bold text-emerald-700">
+                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
                     Total Payable: ₹{totalPaid.toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -441,17 +487,17 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
             )}
           </div>
 
-          <div className="pt-3 border-t border-stone-200 flex items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-stone-600 hover:text-stone-900"
+              className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-indigo-700 rounded-lg hover:bg-indigo-800 transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>

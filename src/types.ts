@@ -49,10 +49,22 @@ export interface Member {
   seatAssignmentMode: 'Auto' | 'Manual'; // Auto sequential on entry or Manual fixed
   lockerId: string | null; // e.g., L-01
   faceRegistered: boolean;
-  faceTemplateId: string; // e.g., FACE-BIO-1001
+  faceTemplateId: string; // e.g., FACE-BIO-1001-9A4F
+  password?: string; // Member portal login password
   idProof: string;
   address: string;
   notes?: string;
+}
+
+export interface AdminProfile {
+  libraryName: string;
+  adminName: string;
+  adminRole: string;
+  phone: string;
+  email: string;
+  address: string;
+  gateId: string;
+  defaultHourlyRate: number;
 }
 
 export interface SeatReservation {

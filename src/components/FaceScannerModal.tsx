@@ -8,6 +8,7 @@ import {
   Armchair,
   Clock,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { Member, Seat, AttendanceRecord } from '../types';
 import { QrCodeSvg } from './QrCodeSvg';
@@ -50,8 +51,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
   const [scanProgress, setScanProgress] = useState(0);
   const [seatMode, setSeatMode] = useState<'Auto' | 'Manual'>('Auto');
   const [manualSeatId, setManualSeatId] = useState<string>('');
-  const [simulatedDurationMins, setSimulatedDurationMins] =
-    useState<number>(180);
+  const [sessionDurationMins, setSessionDurationMins] = useState<number>(180);
   const [liveSeconds, setLiveSeconds] = useState<number>(0);
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
         60,
         Math.round((Date.now() - activeSession.checkInTimestamp) / 60000)
       );
-      setSimulatedDurationMins(elapsed);
+      setSessionDurationMins(elapsed);
     }
 
     let stream: MediaStream | null = null;
@@ -135,7 +135,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
   const effectiveHourlyRate =
     member.hourlyRate + (chosenSeatObj?.hourlyRateAddon || 0);
 
-  const exitHours = simulatedDurationMins / 60;
+  const exitHours = sessionDurationMins / 60;
   const estimatedFeeDeduction = Math.max(
     5,
     Math.round(
@@ -150,15 +150,13 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
   const faceScore =
     99.1 + ((member.id.charCodeAt(member.id.length - 1) % 8) / 10);
 
-  const gateQrUrl = `${window.location.origin}/?gate=scan&memberId=${encodeURIComponent(
-    member.id
-  )}`;
+  const gateQrUrl = `${window.location.origin}/?gate=scan`;
 
   const handleCompleteAction = () => {
     if (isExitFlow) {
       onConfirmExitAfterFaceScan({
         memberId: member.id,
-        overrideDurationMinutes: simulatedDurationMins,
+        overrideDurationMinutes: sessionDurationMins,
         faceScore,
       });
       onClose();
@@ -169,7 +167,6 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
         assignMode: seatMode === 'Auto' ? 'Auto (1-by-1)' : 'Manual',
         faceScore,
       });
-      // Show the student's live entry dashboard with hours & balance!
       setScanStage('entry-live-summary');
     }
   };
@@ -188,13 +185,13 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
             <div>
               <h3 className="text-sm font-bold">
                 {scanStage === 'entry-live-summary'
-                  ? 'Student Entry Confirmed — Live Hours & Balance View'
+                  ? 'Entry Confirmed — Seat, Hours & Wallet Status'
                   : isExitFlow
-                  ? 'Phone QR + Face ID Exit & Balance Deduction'
-                  : 'Phone QR + Face ID Entry & Live Balance Check'}
+                  ? 'Gate QR + Face ID Exit & Hourly Wallet Settlement'
+                  : 'Gate QR + Face ID Entry & Seat Assignment'}
               </h3>
               <p className="text-[11px] text-slate-400 font-mono tabular-nums">
-                {member.name} ({member.id}) · Face ID: {member.faceTemplateId}
+                {member.name} ({member.id}) · Template: {member.faceTemplateId}
               </p>
             </div>
           </div>
@@ -206,7 +203,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
           </button>
         </div>
 
-        {/* Post-Entry Student Screen: Shows exact Hours & Wallet Balance */}
+        {/* Post-Entry Student Screen: Shows Seat to Sit In, Exact Hours & Wallet Balance */}
         {scanStage === 'entry-live-summary' ? (
           <div className="p-6 space-y-5">
             <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-between">
@@ -214,11 +211,14 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                 <CheckCircle2 className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <div>
                   <p className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
-                    Welcome, {member.name}! Your Study Timer Has Started
+                    Welcome, {member.name}! Face Template Verified
                   </p>
-                  <p className="text-xs text-emerald-800 dark:text-emerald-300 font-mono tabular-nums">
-                    Assigned Single-Floor Seat:{' '}
-                    <strong>{chosenSeatId || 'S-01'}</strong> ({seatMode})
+                  <p className="text-xs text-emerald-800 dark:text-emerald-300 font-mono tabular-nums mt-0.5">
+                    Please sit at Seat:{' '}
+                    <strong className="text-sm underline">
+                      {chosenSeatId || 'S-01'}
+                    </strong>{' '}
+                    ({chosenSeatObj?.rowZone || 'Single-Floor Hall'})
                   </p>
                 </div>
               </div>
@@ -227,18 +227,18 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
               </span>
             </div>
 
-            {/* Member Hours & Balance Dashboard (What the member sees on entry!) */}
+            {/* Member Hours & Balance Dashboard */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-4 bg-slate-900 text-white rounded-xl space-y-1">
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Total Hours Completed</span>
+                  <Armchair className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Your Assigned Seat</span>
                 </div>
-                <p className="text-2xl font-bold font-mono tabular-nums text-white">
-                  {member.totalHoursUsed.toFixed(1)} hrs
+                <p className="text-2xl font-bold font-mono tabular-nums text-amber-400">
+                  {chosenSeatId || 'S-01'}
                 </p>
-                <p className="text-[11px] font-mono tabular-nums text-emerald-400">
-                  + Live Session Running
+                <p className="text-[11px] font-mono tabular-nums text-slate-400">
+                  {chosenSeatObj?.rowZone || 'Ground Floor'}
                 </p>
               </div>
 
@@ -251,44 +251,44 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                   ₹{member.walletBalance.toLocaleString('en-IN')}
                 </p>
                 <p className="text-[11px] font-mono tabular-nums text-slate-400">
-                  Rate: ₹{effectiveHourlyRate}/hr
+                  Rate: ₹{effectiveHourlyRate}/hr ({remainingHoursAvailable}h left)
                 </p>
               </div>
 
               <div className="p-4 bg-slate-900 text-white rounded-xl space-y-1">
                 <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                  <Armchair className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Study Hours Left in Balance</span>
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Total Hours Completed</span>
                 </div>
-                <p className="text-2xl font-bold font-mono tabular-nums text-amber-400">
-                  {remainingHoursAvailable} hrs
+                <p className="text-2xl font-bold font-mono tabular-nums text-white">
+                  {member.totalHoursUsed.toFixed(1)} hrs
                 </p>
-                <p className="text-[11px] font-mono tabular-nums text-slate-400">
-                  Seat {chosenSeatId || 'S-01'} Active
+                <p className="text-[11px] font-mono tabular-nums text-emerald-400">
+                  + Live Session Running
                 </p>
               </div>
             </div>
 
             <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-600 dark:text-slate-300 flex items-center justify-between">
               <span>
-                Jab aap library se bahar jayenge, phone se firse QR + Face ID scan karke Exit mark karein.
+                Jab aap library exit karenge, phone se firse Common Gate QR + Face ID scan karke Exit mark karein.
               </span>
               <button
                 type="button"
                 onClick={onClose}
                 className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shrink-0 ml-3"
               >
-                Done · Go to Desk
+                Done · Go to Seat {chosenSeatId || 'S-01'}
               </button>
             </div>
           </div>
         ) : (
           <div className="p-5 sm:p-6 space-y-4">
-            {/* ALWAYS VISIBLE: Member's Current Hours Completed & Wallet Balance Banner */}
+            {/* Member's Current Hours Completed & Wallet Balance Banner */}
             <div className="grid grid-cols-3 gap-2.5 p-3.5 bg-slate-900 dark:bg-slate-950 text-white rounded-xl border border-slate-800 font-mono tabular-nums">
               <div>
                 <p className="text-[10px] font-sans text-slate-400">
-                  Your Completed Hours
+                  Completed Hours
                 </p>
                 <p className="text-base font-bold text-white mt-0.5">
                   {member.totalHoursUsed.toFixed(1)} hrs
@@ -296,7 +296,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
               </div>
               <div className="border-x border-slate-800 px-2.5">
                 <p className="text-[10px] font-sans text-slate-400">
-                  Your Wallet Balance
+                  Wallet Balance
                 </p>
                 <p className="text-base font-bold text-emerald-400 mt-0.5">
                   ₹{member.walletBalance.toLocaleString('en-IN')}
@@ -304,7 +304,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
               </div>
               <div className="pl-1">
                 <p className="text-[10px] font-sans text-slate-400">
-                  Hours Remaining (₹{effectiveHourlyRate}/hr)
+                  Hours Left (₹{effectiveHourlyRate}/hr)
                 </p>
                 <p className="text-base font-bold text-amber-400 mt-0.5">
                   {remainingHoursAvailable} hrs left
@@ -312,20 +312,26 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
               </div>
             </div>
 
-            {/* Step 1: Common Gate QR Scanned */}
+            {/* Step 1: Common Gate QR Scanned & Stored Face Template Verification */}
             <div className="flex items-center justify-between p-3 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs">
               <div className="flex items-center gap-2.5">
                 <div className="p-1 bg-white border border-indigo-200 rounded">
                   <QrCodeSvg value={gateQrUrl} size={36} />
                 </div>
                 <div>
-                  <p className="font-semibold text-indigo-950 dark:text-indigo-200">
-                    Step 1: Common Library Gate QR Scanned
+                  <p className="font-semibold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>
+                      Matching Stored Template:{' '}
+                      <code className="font-mono font-bold">
+                        {member.faceTemplateId}
+                      </code>
+                    </span>
                   </p>
                   <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-mono tabular-nums">
                     {isExitFlow
-                      ? `Active on Seat ${activeSession?.seatCode} since ${activeSession?.checkInDisplay}`
-                      : `Ready for Face ID Entry Scan`}
+                      ? `Currently seated at ${activeSession?.seatCode} since ${activeSession?.checkInDisplay}`
+                      : `Common Entrance Gate QR Scanned — Ready for Face Verification`}
                   </p>
                 </div>
               </div>
@@ -357,7 +363,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
               )}
 
               <div
-                className={`relative z-10 w-40 h-36 rounded-2xl border-2 transition-colors flex flex-col items-center justify-between p-3 ${
+                className={`relative z-10 w-48 h-36 rounded-2xl border-2 transition-colors flex flex-col items-center justify-between p-3 ${
                   scanStage === 'verified'
                     ? 'border-emerald-400 bg-emerald-950/20'
                     : scanStage === 'scanning-face'
@@ -366,7 +372,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                 }`}
               >
                 <div className="w-full flex justify-between text-[10px] font-mono tabular-nums text-white/90">
-                  <span>FACE-ID</span>
+                  <span>{member.faceTemplateId}</span>
                   <span>{member.id}</span>
                 </div>
 
@@ -382,17 +388,17 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                 <div className="text-[11px] font-mono tabular-nums font-semibold text-center">
                   {scanStage === 'qr-scanned' && (
                     <span className="text-indigo-200">
-                      Click "Start Face ID Scan"
+                      Click "Verify Face Template"
                     </span>
                   )}
                   {scanStage === 'scanning-face' && (
                     <span className="text-amber-300">
-                      Scanning Face... {scanProgress}%
+                      Matching {member.faceTemplateId}... {scanProgress}%
                     </span>
                   )}
                   {scanStage === 'verified' && (
                     <span className="text-emerald-300">
-                      Match {faceScore.toFixed(1)}% Verified
+                      Template Verified ({faceScore.toFixed(1)}%)
                     </span>
                   )}
                 </div>
@@ -405,7 +411,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-semibold">
                     <Armchair className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <span>Single-Floor Seat Assignment</span>
+                    <span>Seat to Sit In (Single-Floor Hall)</span>
                   </div>
                   <div className="flex items-center gap-1 p-1 bg-slate-200 dark:bg-slate-700 rounded-lg">
                     <button
@@ -436,7 +442,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                 {seatMode === 'Auto' ? (
                   <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700 font-mono tabular-nums">
                     <span className="text-slate-600 dark:text-slate-400">
-                      Next Sequential Vacant Seat:
+                      Assigned Seat on Entry:
                     </span>
                     <span className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">
                       {nextAutoSeat
@@ -464,7 +470,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
               <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2.5 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold">
-                    Session Duration (for Hourly Fee Cut):
+                    Completed Session Duration (Hourly Wallet Settlement):
                   </span>
                   <div className="flex items-center gap-1 font-mono tabular-nums">
                     {[
@@ -477,9 +483,9 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                       <button
                         type="button"
                         key={preset.mins}
-                        onClick={() => setSimulatedDurationMins(preset.mins)}
+                        onClick={() => setSessionDurationMins(preset.mins)}
                         className={`px-2 py-1 rounded border text-[11px] ${
-                          simulatedDurationMins === preset.mins
+                          sessionDurationMins === preset.mins
                             ? 'bg-slate-900 dark:bg-amber-400 text-white dark:text-slate-950 border-slate-900'
                             : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700'
                         }`}
@@ -494,8 +500,8 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                   <div>
                     <p className="text-[11px] text-slate-500">Session Hours</p>
                     <p className="text-sm font-bold">
-                      {Math.floor(simulatedDurationMins / 60)}h{' '}
-                      {simulatedDurationMins % 60}m
+                      {Math.floor(sessionDurationMins / 60)}h{' '}
+                      {sessionDurationMins % 60}m
                     </p>
                   </div>
                   <div>
@@ -537,8 +543,8 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                   <ScanFace className="w-4 h-4" />
                   <span>
                     {scanStage === 'scanning-face'
-                      ? 'Verifying Face ID...'
-                      : 'Start Face ID Biometric Scan'}
+                      ? 'Verifying Face Template...'
+                      : `Verify Face Template (${member.faceTemplateId})`}
                   </span>
                 </button>
               ) : (
@@ -558,7 +564,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                     <>
                       <CheckCircle2 className="w-4 h-4" />
                       <span>
-                        Confirm Entry & View My Hours / Balance
+                        Confirm Entry · Assign Seat {chosenSeatId || 'S-01'}
                       </span>
                     </>
                   )}

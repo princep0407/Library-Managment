@@ -76,7 +76,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
           <div className="flex items-center gap-2 text-xs">
             <Armchair className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
             <span className="font-semibold text-slate-900 dark:text-white">
-              Test 1-by-1 Auto Seat Assignment on Entry:
+              Quick Gate Check-In (1-by-1 Auto Seat Assignment):
             </span>
             <span className="text-slate-500 dark:text-slate-400">
               Select arriving member to scan Face ID & auto-assign{' '}

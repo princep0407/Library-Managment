@@ -21,6 +21,8 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
+  UserCircle,
+  Smartphone,
 } from 'lucide-react';
 import {
   Member,
@@ -57,13 +59,20 @@ import { NewAdmissionModal } from './components/NewAdmissionModal';
 import { FaceScannerModal } from './components/FaceScannerModal';
 import { QrFaceAttendanceSection } from './components/QrFaceAttendanceSection';
 import { SeatBoardSection } from './components/SeatBoardSection';
+import { MemberPortal } from './components/MemberPortal';
 import {
   exportMembersToCsv,
   exportFinanceToCsv,
   triggerPrintPdfReport,
 } from './utils/exportUtils';
 
-type NavTab = 'dashboard' | 'members' | 'seats' | 'finance' | 'attendance';
+type NavTab =
+  | 'dashboard'
+  | 'members'
+  | 'seats'
+  | 'finance'
+  | 'attendance'
+  | 'member-portal';
 type ReportRange = 'Weekly' | 'Monthly' | 'Quarterly' | '6M / Yearly';
 
 const STORAGE_KEY = 'vidyakosh_library_state_v3';
@@ -97,6 +106,16 @@ export default function App() {
   }, [theme]);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [loggedInMemberId, setLoggedInMemberId] = useState<string | null>(null);
+  const [isAdminProfileOpen, setIsAdminProfileOpen] = useState<boolean>(false);
+  const [adminProfile, setAdminProfile] = useState({
+    libraryName: 'VidyaKosh Single-Floor Study Hall',
+    adminName: 'Rajeshwar Verma',
+    adminRole: 'Chief Library Director',
+    phone: '9811002244',
+    email: 'admin@vidyakoshlibrary.in',
+    address: '2nd Cross, Mukherjee Nagar Reading Hub, New Delhi',
+  });
 
   const [members, setMembers] = useState<Member[]>(() => {
     try {
@@ -1012,6 +1031,7 @@ export default function App() {
     { id: 'seats', label: 'Single-Floor Seats', icon: Armchair },
     { id: 'finance', label: 'Wallet & Finance', icon: Wallet },
     { id: 'attendance', label: 'QR + Face ID Gate', icon: ScanFace },
+    { id: 'member-portal', label: 'Student Login Portal', icon: Smartphone },
   ] as const;
 
   const handleExportMembersPdf = () => {
@@ -1206,18 +1226,25 @@ export default function App() {
               )}
             </button>
 
-            {!sidebarCollapsed && (
-              <button
-                onClick={() => {
-                  localStorage.removeItem(STORAGE_KEY);
-                  window.location.reload();
-                }}
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                <RotateCcw className="w-3 h-3" />
-                <span>Reset Demo State</span>
-              </button>
-            )}
+            <button
+              onClick={() => setIsAdminProfileOpen(true)}
+              title="Library & Admin Profile"
+              className={`w-full flex items-center ${
+                sidebarCollapsed ? 'justify-center' : 'justify-between px-3'
+              } py-2 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer`}
+            >
+              {!sidebarCollapsed && (
+                <div className="text-left truncate">
+                  <p className="font-semibold text-white truncate">
+                    {adminProfile.adminName}
+                  </p>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {adminProfile.adminRole}
+                  </p>
+                </div>
+              )}
+              <UserCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            </button>
           </div>
         </aside>
 
@@ -1261,20 +1288,41 @@ export default function App() {
 
             <div className="flex items-center gap-2 shrink-0">
               <button
+                onClick={() => setActiveTab('member-portal')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                  activeTab === 'member-portal'
+                    ? 'bg-amber-400 text-slate-950 border-amber-400'
+                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Student Login Portal</span>
+              </button>
+
+              <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 {theme === 'dark' ? (
                   <>
                     <Sun className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden sm:inline">Light Mode</span>
+                    <span className="hidden lg:inline">Light</span>
                   </>
                 ) : (
                   <>
                     <Moon className="w-3.5 h-3.5 text-indigo-600" />
-                    <span className="hidden sm:inline">Dark Mode</span>
+                    <span className="hidden lg:inline">Dark</span>
                   </>
                 )}
+              </button>
+
+              <button
+                onClick={() => setIsAdminProfileOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Admin & Library Profile"
+              >
+                <UserCircle className="w-4 h-4 text-indigo-600 dark:text-amber-400" />
+                <span className="hidden sm:inline">Profile</span>
               </button>
 
               <button
@@ -1282,7 +1330,7 @@ export default function App() {
                   setAdmissionPreselectedSeat(null);
                   setIsAdmissionOpen(true);
                 }}
-                className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
+                className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap cursor-pointer"
               >
                 + New Admission
               </button>
@@ -2182,10 +2230,177 @@ export default function App() {
                   setProfileInitialEdit(false);
                   setProfileMemberId(mId);
                 }}
+                onOpenMemberPortal={() => setActiveTab('member-portal')}
+              />
+            )}
+
+            {/* VIEW 6: STUDENT LOGIN & SELF-REGISTRATION PORTAL */}
+            {activeTab === 'member-portal' && (
+              <MemberPortal
+                members={members}
+                seats={seats}
+                attendance={attendance}
+                payments={payments}
+                nextMemberId={nextMemberId}
+                nextAutoSeat={nextAutoSeat}
+                loggedInMemberId={loggedInMemberId}
+                onSetLoggedInMemberId={setLoggedInMemberId}
+                onBackToAdmin={() => setActiveTab('dashboard')}
+                onOpenFaceScanner={(m) => setFaceScanMember(m)}
+                onOpenReceipt={(pay) => setSelectedReceipt(pay)}
+                onUpdateMember={handleSaveMemberEdit}
+                onRegisterMemberFromPortal={handleCreateAdmission}
               />
             )}
           </main>
         </div>
+
+        {/* ADMIN & LIBRARY PROFILE MODAL */}
+        {isAdminProfileOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-lg shadow-2xl overflow-hidden text-slate-900 dark:text-slate-100">
+              <div className="flex items-center justify-between px-5 py-4 bg-slate-900 dark:bg-slate-950 text-white">
+                <div className="flex items-center gap-2.5">
+                  <UserCircle className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <h3 className="text-sm font-bold">
+                      Admin & Library Profile Settings
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Manage library details or switch to Student Self-Service Portal
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsAdminProfileOpen(false)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Library Name
+                    </label>
+                    <input
+                      type="text"
+                      value={adminProfile.libraryName}
+                      onChange={(e) =>
+                        setAdminProfile({
+                          ...adminProfile,
+                          libraryName: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Admin Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={adminProfile.adminName}
+                      onChange={(e) =>
+                        setAdminProfile({
+                          ...adminProfile,
+                          adminName: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Contact Number
+                    </label>
+                    <input
+                      type="text"
+                      value={adminProfile.phone}
+                      onChange={(e) =>
+                        setAdminProfile({
+                          ...adminProfile,
+                          phone: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 font-mono bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Official Email
+                    </label>
+                    <input
+                      type="email"
+                      value={adminProfile.email}
+                      onChange={(e) =>
+                        setAdminProfile({
+                          ...adminProfile,
+                          email: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Single-Floor Hall Address
+                  </label>
+                  <input
+                    type="text"
+                    value={adminProfile.address}
+                    onChange={(e) =>
+                      setAdminProfile({
+                        ...adminProfile,
+                        address: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                  />
+                </div>
+
+                <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-indigo-950 dark:text-indigo-200">
+                      Student Self-Service Login & Registration
+                    </p>
+                    <p className="text-[11px] text-indigo-700 dark:text-indigo-300">
+                      Let members log in with password to check their seat, in/out times, and wallet
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminProfileOpen(false);
+                      setActiveTab('member-portal');
+                    }}
+                    className="px-3 py-1.5 font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shrink-0 cursor-pointer"
+                  >
+                    Open Student Portal
+                  </button>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminProfileOpen(false);
+                      triggerToast('Saved Admin & Library Profile');
+                    }}
+                    className="px-4 py-2 font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer"
+                  >
+                    Save Profile
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* MODALS */}
         <DigitalReceiptModal
