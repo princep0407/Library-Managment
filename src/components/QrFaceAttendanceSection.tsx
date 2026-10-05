@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScanFace,
   Printer,
-  LogIn,
   LogOut,
   Smartphone,
   Wallet,
+  Clock,
+  Download,
+  FileText,
   Armchair,
 } from 'lucide-react';
 import { Member, Seat, AttendanceRecord } from '../types';
-import { COMMON_LIBRARY_QR_PAYLOAD } from '../data/initialData';
 import { QrCodeSvg } from './QrCodeSvg';
+import {
+  exportAttendanceToCsv,
+  triggerPrintPdfReport,
+} from '../utils/exportUtils';
 
 interface QrFaceAttendanceSectionProps {
   members: Member[];
@@ -34,6 +39,13 @@ export const QrFaceAttendanceSection: React.FC<
     members[0]?.id || 'LIB-1001'
   );
   const [quickSearch, setQuickSearch] = useState<string>('');
+  const [tick, setTick] = useState<number>(0);
+
+  // Live 1-second ticker so active session timers update in real time
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const currentlyInsideList = attendance.filter((a) => a.status === 'Inside');
   const selectedMember =
@@ -44,29 +56,82 @@ export const QrFaceAttendanceSection: React.FC<
       ) || null
     : null;
 
+  // Real scannable URL for the Common Library Gate QR code
+  const scannableGateUrl = `${window.location.origin}/?gate=scan`;
+
+  const formatElapsed = (startMs: number) => {
+    const totalSec = Math.max(
+      0,
+      Math.floor((Date.now() - startMs) / 1000) + (tick * 0)
+    );
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    return {
+      formatted: `${String(hrs).padStart(2, '0')}h ${String(mins).padStart(
+        2,
+        '0'
+      )}m ${String(secs).padStart(2, '0')}s`,
+      hoursFloat: totalSec / 3600,
+    };
+  };
+
+  const handleExportAttendancePdf = () => {
+    const headers = [
+      'Date',
+      'Member',
+      'Seat & Mode',
+      'Entry → Exit',
+      'Hours',
+      'Fee Cut',
+      'Rem. Balance',
+    ];
+    const rows = attendance.map((a) => {
+      const hrs = a.durationMinutes ? Math.floor(a.durationMinutes / 60) : 0;
+      const mins = a.durationMinutes ? a.durationMinutes % 60 : 0;
+      return [
+        a.date,
+        `${a.memberName} (${a.memberId})`,
+        `${a.seatCode || 'Auto'} (${a.seatAssignMode})`,
+        `${a.checkInDisplay} -> ${a.checkOutDisplay || 'Active'}`,
+        a.status === 'Inside' ? 'Running' : `${hrs}h ${mins}m`,
+        a.feeDeducted !== null
+          ? `-INR ${a.feeDeducted}`
+          : `INR ${a.hourlyRateApplied}/hr`,
+        a.balanceAfterExit !== null ? `INR ${a.balanceAfterExit}` : 'Active',
+      ];
+    });
+    triggerPrintPdfReport(
+      'Biometric Attendance & Hourly Balance Deduction Report',
+      `Total Logged Sessions: ${attendance.length} · Currently Inside: ${currentlyInsideList.length}`,
+      headers,
+      rows
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            Common Gate QR + Face ID Biometric Entry & Exit
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Common Gate QR + Face ID Entry, Exit & Member Live Balance
           </h1>
-          <p className="text-xs text-stone-600 mt-1">
-            Ek hi common Library QR code sabhi members ke liye · Entry par Face ID scan hote hi sequential seat (1-by-1) assign hogi aur Exit par hourly usage ke hisab se wallet balance cut hoga
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+            Scan the common Library Gate QR with any phone camera (or click QR below) · Member sees live study hours completed & remaining wallet balance
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="text-xs font-mono tabular-nums bg-white border border-stone-200 px-3.5 py-2 rounded-lg">
+        <div className="flex items-center gap-2.5">
+          <div className="text-xs font-mono tabular-nums bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-2 rounded-lg">
             Next Auto Seat:{' '}
-            <strong className="text-indigo-700">
+            <strong className="text-indigo-600 dark:text-indigo-400">
               {nextAutoSeat ? nextAutoSeat.code : 'Full'}
             </strong>
           </div>
-          <div className="text-xs font-mono tabular-nums bg-stone-900 text-white px-3.5 py-2 rounded-lg">
+          <div className="text-xs font-mono tabular-nums bg-slate-900 dark:bg-indigo-600 text-white px-3.5 py-2 rounded-lg">
             Inside Now:{' '}
-            <strong className="text-amber-400">
+            <strong className="text-amber-300">
               {currentlyInsideList.length} Students
             </strong>
           </div>
@@ -74,64 +139,67 @@ export const QrFaceAttendanceSection: React.FC<
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Common Library Gate QR Poster + Student Phone Face ID Kiosk (5 cols) */}
-        <div className="lg:col-span-5 bg-white border border-stone-200 rounded-xl p-6 space-y-5">
-          <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+        {/* Left: Scannable Common Library Gate QR Poster + Student Phone Live View (5 cols) */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 sm:p-6 space-y-5">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
             <div>
-              <h2 className="text-base font-bold text-stone-900">
-                Master Library Entrance QR Poster
+              <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                Master Library Entrance QR Code
               </h2>
-              <p className="text-xs text-stone-500">
-                Single common QR code placed at library gate for all students
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                100% Scannable ISO QR · Scan with phone camera or click QR to test
               </p>
             </div>
             <button
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Gate QR</span>
+              <span>Print Gate Poster</span>
             </button>
           </div>
 
-          {/* Printable Common QR Card */}
+          {/* Printable & Clickable Scannable Common QR Card */}
           <div
-            id="printable-area"
-            className="p-5 bg-stone-900 text-white rounded-xl flex flex-col items-center text-center space-y-3"
+            onClick={() => selectedMember && onOpenFaceScanner(selectedMember)}
+            title="Click QR Code or scan with mobile camera to open Student Face ID & Live Balance Portal"
+            className="p-5 bg-slate-900 dark:bg-slate-950 text-white rounded-xl flex flex-col items-center text-center space-y-3 cursor-pointer hover:ring-2 hover:ring-indigo-500 transition-all border border-slate-800"
           >
-            <div className="text-xs font-mono tabular-nums text-amber-400 tracking-wider">
+            <div className="text-[11px] font-mono tabular-nums text-amber-400 tracking-wider">
               VIDYAKOSH SINGLE-FLOOR STUDY HALL
             </div>
             <h3 className="text-sm font-bold">
-              Scan on Phone for Face ID Entry & Exit
+              Scan on Phone or Click QR for Face ID Entry / Exit
             </h3>
             <div className="p-3 bg-white rounded-xl shadow-md">
-              <QrCodeSvg value={COMMON_LIBRARY_QR_PAYLOAD} size={136} />
+              <QrCodeSvg value={scannableGateUrl} size={144} />
             </div>
-            <p className="text-[11px] text-stone-300 max-w-xs leading-relaxed">
-              1. Scan this Common Library QR from your phone · 2. Verify Face ID · 3. Seat assigns automatically (1-by-1) & timer starts · 4. Scan & Verify Face ID on Exit to deduct hourly fee.
+            <p className="text-[11px] text-slate-300 max-w-xs leading-relaxed">
+              One Common QR for all members · Tap QR above or scan from mobile camera to verify Face ID, auto-assign seat & check your live hours & balance.
             </p>
           </div>
 
-          {/* Student Phone Simulator / Gate Selector */}
-          <div className="pt-2 border-t border-stone-200 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-stone-900">
-              <Smartphone className="w-4 h-4 text-indigo-700" />
-              <span>Simulate Student Phone QR Scan + Face ID Verification</span>
+          {/* Student Live Hours & Balance Inspector */}
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Smartphone className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <span>Student Mobile Portal — Check Hours & Balance</span>
+              </span>
             </div>
 
             <input
               type="text"
-              placeholder="Filter member by Name or ID (LIB-1001)..."
+              placeholder="Search student by Name or ID (LIB-1001)..."
               value={quickSearch}
               onChange={(e) => setQuickSearch(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-lg"
+              className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
             />
 
             <select
               value={selectedMemberId}
               onChange={(e) => setSelectedMemberId(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-white border border-stone-300 rounded-lg font-medium"
+              className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg font-medium text-slate-900 dark:text-white"
             >
               {members
                 .filter((m) =>
@@ -148,41 +216,112 @@ export const QrFaceAttendanceSection: React.FC<
                   );
                   return (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.id}) · Bal: ₹{m.walletBalance} (₹{m.hourlyRate}/hr){' '}
-                      {isInside ? `· [INSIDE - Seat ${m.seatId}]` : '· [OUTSIDE]'}
+                      {m.name} ({m.id}) · {m.totalHoursUsed.toFixed(1)}h done · Bal: ₹
+                      {m.walletBalance}{' '}
+                      {isInside ? `· [INSIDE - ${m.seatId}]` : '· [OUTSIDE]'}
                     </option>
                   );
                 })}
             </select>
 
+            {/* Member's Live Study Hours & Balance Card */}
             {selectedMember && (
-              <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-stone-900">
-                    {selectedMember.name} ({selectedMember.id})
-                  </span>
-                  <span className="font-mono tabular-nums text-emerald-700 font-semibold">
-                    Wallet: ₹{selectedMember.walletBalance} (₹
-                    {selectedMember.hourlyRate}/hr)
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-stone-600 font-mono tabular-nums">
-                  <span>
-                    Gate State:{' '}
-                    <strong className="text-stone-900">
-                      {activeSession
-                        ? `Inside on Seat ${activeSession.seatCode} since ${activeSession.checkInDisplay}`
-                        : 'Outside Hall'}
-                    </strong>
+              <div className="p-4 bg-slate-900 dark:bg-slate-950 text-white rounded-xl space-y-3.5 border border-slate-800">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <div>
+                    <p className="text-xs font-bold text-white">
+                      {selectedMember.name} ({selectedMember.id})
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {selectedMember.examPrep} · Rate: ₹{selectedMember.hourlyRate}/hr
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs font-mono tabular-nums font-semibold ${
+                      activeSession ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
+                    {activeSession
+                      ? `Inside (Seat ${activeSession.seatCode})`
+                      : 'Outside Hall'}
                   </span>
                 </div>
 
+                {/* Live Hours & Balance Readout */}
+                {(() => {
+                  const liveInfo = activeSession
+                    ? formatElapsed(activeSession.checkInTimestamp)
+                    : null;
+                  const liveAccruedFee =
+                    liveInfo && activeSession
+                      ? Math.round(
+                          liveInfo.hoursFloat * activeSession.hourlyRateApplied
+                        )
+                      : 0;
+                  const effectiveRemainingBal = Math.max(
+                    0,
+                    selectedMember.walletBalance - liveAccruedFee
+                  );
+                  const hoursRemaining = (
+                    effectiveRemainingBal / selectedMember.hourlyRate
+                  ).toFixed(1);
+
+                  return (
+                    <div className="grid grid-cols-3 gap-2.5 text-xs font-mono tabular-nums">
+                      <div className="p-2.5 bg-slate-800/90 rounded-lg">
+                        <p className="text-[10px] font-sans text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>
+                            {activeSession ? 'Live Session' : 'Hours Studied'}
+                          </span>
+                        </p>
+                        <p className="text-sm font-bold text-white mt-1">
+                          {liveInfo
+                            ? liveInfo.formatted
+                            : `${selectedMember.totalHoursUsed.toFixed(1)} hrs`}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Total: {selectedMember.totalHoursUsed.toFixed(1)}h
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 bg-slate-800/90 rounded-lg">
+                        <p className="text-[10px] font-sans text-slate-400 flex items-center gap-1">
+                          <Wallet className="w-3 h-3 text-emerald-400" />
+                          <span>Wallet Balance</span>
+                        </p>
+                        <p className="text-sm font-bold text-emerald-400 mt-1">
+                          ₹{effectiveRemainingBal.toLocaleString('en-IN')}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {liveAccruedFee > 0
+                            ? `-₹${liveAccruedFee} running`
+                            : `₹${selectedMember.hourlyRate}/hr tariff`}
+                        </p>
+                      </div>
+
+                      <div className="p-2.5 bg-slate-800/90 rounded-lg">
+                        <p className="text-[10px] font-sans text-slate-400 flex items-center gap-1">
+                          <Armchair className="w-3 h-3 text-indigo-400" />
+                          <span>Balance Hours</span>
+                        </p>
+                        <p className="text-sm font-bold text-amber-400 mt-1">
+                          {hoursRemaining} hrs
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Left in wallet
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <button
                   onClick={() => onOpenFaceScanner(selectedMember)}
-                  className={`w-full mt-2 py-2.5 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors ${
+                  className={`w-full py-2.5 px-4 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-colors ${
                     activeSession
-                      ? 'bg-amber-500 text-stone-950 hover:bg-amber-400'
-                      : 'bg-indigo-700 text-white hover:bg-indigo-800'
+                      ? 'bg-amber-400 text-slate-950 hover:bg-amber-300'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
                   }`}
                 >
                   <ScanFace className="w-4 h-4" />
@@ -199,61 +338,79 @@ export const QrFaceAttendanceSection: React.FC<
           </div>
         </div>
 
-        {/* Right: Admin Live Session & Hourly Fee Deduction Log (7 cols) */}
+        {/* Right: Live Active Sessions (with Live Hours & Balance) + Admin Ledger with Export PDF/CSV (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
           {/* Active Students Currently Inside */}
-          <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-bold text-stone-900">
-                  Live Active Sessions Inside Single-Floor Hall ({currentlyInsideList.length})
+                <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Students Currently Inside — Live Hours & Balance Monitor (
+                  {currentlyInsideList.length})
                 </h2>
-                <p className="text-xs text-stone-500">
-                  Students who scanned Common Gate QR + Face ID · Timer running · Click "Exit + Face ID" when leaving
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Real-time study duration, running fee & remaining wallet balance for every active student
                 </p>
               </div>
             </div>
 
             {currentlyInsideList.length === 0 ? (
-              <p className="text-xs text-stone-500 py-6 text-center">
-                No students currently inside. Use the QR + Face ID scanner on the left to log entry.
+              <p className="text-xs text-slate-500 py-6 text-center">
+                No students currently inside. Scan the Common QR + Face ID on the left to log entry.
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentlyInsideList.map((rec) => {
                   const mObj = members.find((m) => m.id === rec.memberId);
+                  const live = formatElapsed(rec.checkInTimestamp);
+                  const accrued = Math.round(
+                    live.hoursFloat * rec.hourlyRateApplied
+                  );
+                  const remBal = Math.max(
+                    0,
+                    (mObj?.walletBalance || 0) - accrued
+                  );
+
                   return (
                     <div
                       key={rec.id}
-                      className="p-3.5 bg-stone-50 border border-stone-200 rounded-lg flex items-center justify-between gap-3"
+                      className="p-3.5 bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col justify-between gap-2.5"
                     >
-                      <div className="min-w-0 space-y-0.5">
-                        <button
-                          onClick={() => onOpenMemberProfile(rec.memberId)}
-                          className="text-xs font-bold text-stone-900 hover:underline truncate block"
-                        >
-                          {rec.memberName} ({rec.memberId})
-                        </button>
-                        <p className="text-[11px] font-mono tabular-nums text-indigo-700 font-medium">
-                          Seat {rec.seatCode} ({rec.seatAssignMode}) · In:{' '}
-                          {rec.checkInDisplay}
-                        </p>
-                        <p className="text-[11px] font-mono tabular-nums text-stone-500">
-                          Face Match {rec.faceMatchScore}% · Rate: ₹
-                          {rec.hourlyRateApplied}/hr · Bal: ₹
-                          {mObj?.walletBalance ?? 0}
-                        </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <button
+                            onClick={() => onOpenMemberProfile(rec.memberId)}
+                            className="text-xs font-bold text-slate-900 dark:text-white hover:underline truncate block"
+                          >
+                            {rec.memberName} ({rec.memberId})
+                          </button>
+                          <p className="text-[11px] font-mono tabular-nums text-indigo-600 dark:text-indigo-400 font-semibold">
+                            Seat {rec.seatCode} ({rec.seatAssignMode}) · In{' '}
+                            {rec.checkInDisplay}
+                          </p>
+                        </div>
+                        {mObj && (
+                          <button
+                            onClick={() => onOpenFaceScanner(mObj)}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1"
+                          >
+                            <LogOut className="w-3 h-3" />
+                            <span>Exit Scan</span>
+                          </button>
+                        )}
                       </div>
 
-                      {mObj && (
-                        <button
-                          onClick={() => onOpenFaceScanner(mObj)}
-                          className="px-3 py-1.5 text-xs font-semibold text-stone-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1"
-                        >
-                          <LogOut className="w-3.5 h-3.5" />
-                          <span>Exit Scan</span>
-                        </button>
-                      )}
+                      <div className="pt-2 border-t border-slate-200/80 dark:border-slate-700 flex items-center justify-between text-[11px] font-mono tabular-nums">
+                        <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                          Timer: {live.formatted}
+                        </span>
+                        <span className="text-slate-600 dark:text-slate-300">
+                          Total: {mObj?.totalHoursUsed.toFixed(1)}h
+                        </span>
+                        <span className="font-bold text-slate-900 dark:text-white">
+                          Bal: ₹{remBal}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -261,23 +418,42 @@ export const QrFaceAttendanceSection: React.FC<
             )}
           </div>
 
-          {/* Complete Admin Attendance & Per-Hour Fee Deduction Log */}
-          <div className="bg-white border border-stone-200 rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between">
+          {/* Complete Admin Attendance & Per-Hour Fee Deduction Ledger (with Contextual Export CSV & PDF) */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-bold text-stone-900">
-                  Admin Biometric Log & Hourly Balance Deduction Ledger ({attendance.length})
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Admin Biometric Log & Hourly Balance Deduction Ledger (
+                  {attendance.length})
                 </h3>
-                <p className="text-xs text-stone-500">
-                  Every Entry & Exit Face ID scan, auto-assigned seat, study duration, and exact hourly fee deducted from balance
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Complete record of Entry/Exit Face ID scans, study hours & wallet balance cuts
                 </p>
+              </div>
+
+              {/* Contextual Export PDF & CSV buttons for Attendance Logs */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => exportAttendanceToCsv(attendance)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Export CSV</span>
+                </button>
+                <button
+                  onClick={handleExportAttendancePdf}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Export PDF</span>
+                </button>
               </div>
             </div>
 
-            <div className="border border-stone-200 rounded-lg overflow-hidden max-h-[340px] overflow-y-auto">
+            <div className="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden max-h-[340px] overflow-y-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-stone-100 border-b border-stone-200 text-stone-600">
+                  <tr className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
                     <th className="py-2.5 px-3 font-medium">Member & Face ID</th>
                     <th className="py-2.5 px-3 font-medium">Seat & Mode</th>
                     <th className="py-2.5 px-3 font-medium">Entry → Exit</th>
@@ -290,7 +466,7 @@ export const QrFaceAttendanceSection: React.FC<
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {attendance.map((att) => {
                     const hrs = att.durationMinutes
                       ? Math.floor(att.durationMinutes / 60)
@@ -301,30 +477,33 @@ export const QrFaceAttendanceSection: React.FC<
                     const mObj = members.find((m) => m.id === att.memberId);
 
                     return (
-                      <tr key={att.id} className="hover:bg-stone-50">
+                      <tr
+                        key={att.id}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                      >
                         <td className="py-2.5 px-3">
                           <button
                             onClick={() => onOpenMemberProfile(att.memberId)}
-                            className="font-semibold text-stone-900 hover:underline text-left"
+                            className="font-semibold text-slate-900 dark:text-white hover:underline text-left"
                           >
                             {att.memberName}
                           </button>
-                          <p className="text-[11px] font-mono tabular-nums text-stone-500">
+                          <p className="text-[11px] font-mono tabular-nums text-slate-500">
                             {att.memberId} · Face {att.faceMatchScore}%
                           </p>
                         </td>
                         <td className="py-2.5 px-3 font-mono tabular-nums">
-                          <span className="font-bold text-indigo-800">
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">
                             {att.seatCode || '—'}
                           </span>
-                          <p className="text-[10px] text-stone-500">
+                          <p className="text-[10px] text-slate-500">
                             {att.seatAssignMode}
                           </p>
                         </td>
-                        <td className="py-2.5 px-3 font-mono tabular-nums text-stone-600">
+                        <td className="py-2.5 px-3 font-mono tabular-nums text-slate-600 dark:text-slate-300">
                           <div>{att.date}</div>
                           <div>
-                            <span className="text-emerald-700">
+                            <span className="text-emerald-600 dark:text-emerald-400">
                               {att.checkInDisplay}
                             </span>
                             {' → '}
@@ -333,27 +512,27 @@ export const QrFaceAttendanceSection: React.FC<
                         </td>
                         <td className="py-2.5 px-3 font-mono tabular-nums">
                           {att.status === 'Inside' ? (
-                            <span className="text-indigo-700 font-semibold">
-                              Timer Running
+                            <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                              Running
                             </span>
                           ) : (
-                            <span className="font-semibold text-stone-900">
+                            <span className="font-semibold text-slate-900 dark:text-white">
                               {hrs}h {mins}m
                             </span>
                           )}
                         </td>
                         <td className="py-2.5 px-3 font-mono tabular-nums text-right">
                           {att.feeDeducted !== null ? (
-                            <span className="font-bold text-rose-600">
+                            <span className="font-bold text-rose-600 dark:text-rose-400">
                               -₹{att.feeDeducted}
                             </span>
                           ) : (
-                            <span className="text-stone-500">
+                            <span className="text-slate-500">
                               ₹{att.hourlyRateApplied}/hr
                             </span>
                           )}
                         </td>
-                        <td className="py-2.5 px-3 font-mono tabular-nums text-right font-semibold text-emerald-700">
+                        <td className="py-2.5 px-3 font-mono tabular-nums text-right font-semibold text-emerald-600 dark:text-emerald-400">
                           {att.balanceAfterExit !== null
                             ? `₹${att.balanceAfterExit}`
                             : mObj

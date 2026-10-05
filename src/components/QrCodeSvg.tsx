@@ -1,93 +1,46 @@
 import React, { useMemo } from 'react';
+import QRCode from 'qrcode';
 
 interface QrCodeSvgProps {
   value: string;
   size?: number;
   className?: string;
+  onClick?: () => void;
 }
 
 /**
- * Generates a deterministic 21x21 QR matrix from any string value
- * with authentic QR finder patterns, separators, timing patterns, and hashed data modules.
+ * Generates a 100% real, ISO/IEC 18004 standard scannable QR code SVG
+ * using Reed-Solomon error correction so any mobile camera or QR scanner app scans it immediately.
  */
 export const QrCodeSvg: React.FC<QrCodeSvgProps> = ({
   value,
   size = 148,
   className = '',
+  onClick,
 }) => {
-  const grid = useMemo(() => {
-    const N = 21;
-    const matrix: boolean[][] = Array.from({ length: N }, () =>
-      Array(N).fill(false)
-    );
-    const reserved: boolean[][] = Array.from({ length: N }, () =>
-      Array(N).fill(false)
-    );
-
-    const placeFinder = (rowOffset: number, colOffset: number) => {
-      for (let r = -1; r <= 7; r++) {
-        for (let c = -1; c <= 7; c++) {
-          const rr = rowOffset + r;
-          const cc = colOffset + c;
-          if (rr >= 0 && rr < N && cc >= 0 && cc < N) {
-            reserved[rr][cc] = true;
-            if (r >= 0 && r <= 6 && c >= 0 && c <= 6) {
-              const isBorder = r === 0 || r === 6 || c === 0 || c === 6;
-              const isCenter = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-              matrix[rr][cc] = isBorder || isCenter;
-            } else {
-              matrix[rr][cc] = false;
-            }
+  const qrData = useMemo(() => {
+    try {
+      const qr = QRCode.create(value || 'https://vidyakosh.app', {
+        errorCorrectionLevel: 'M',
+      });
+      const count = qr.modules.size;
+      const data = qr.modules.data;
+      const cells: { r: number; c: number }[] = [];
+      for (let r = 0; r < count; r++) {
+        for (let c = 0; c < count; c++) {
+          if (data[r * count + c]) {
+            cells.push({ r, c });
           }
         }
       }
-    };
-
-    placeFinder(0, 0);
-    placeFinder(0, N - 7);
-    placeFinder(N - 7, 0);
-
-    // Timing patterns
-    for (let i = 8; i < N - 8; i++) {
-      reserved[6][i] = true;
-      matrix[6][i] = i % 2 === 0;
-      reserved[i][6] = true;
-      matrix[i][6] = i % 2 === 0;
+      return { count, cells };
+    } catch {
+      return { count: 21, cells: [] };
     }
-
-    // Dark module
-    reserved[N - 8][8] = true;
-    matrix[N - 8][8] = true;
-
-    // Deterministic FNV-1a + xorshift seed from value
-    let hash = 2166136261;
-    for (let i = 0; i < value.length; i++) {
-      hash ^= value.charCodeAt(i);
-      hash = Math.imul(hash, 16777619);
-    }
-
-    let state = hash >>> 0 || 123456789;
-    const nextBit = () => {
-      state ^= state << 13;
-      state ^= state >>> 17;
-      state ^= state << 5;
-      return ((state >>> 0) & 1) === 1;
-    };
-
-    for (let r = 0; r < N; r++) {
-      for (let c = 0; c < N; c++) {
-        if (!reserved[r][c]) {
-          matrix[r][c] = nextBit();
-        }
-      }
-    }
-
-    return matrix;
   }, [value]);
 
-  const moduleCount = 21;
   const quietZone = 2;
-  const totalModules = moduleCount + quietZone * 2;
+  const totalModules = qrData.count + quietZone * 2;
 
   return (
     <svg
@@ -96,25 +49,22 @@ export const QrCodeSvg: React.FC<QrCodeSvgProps> = ({
       viewBox={`0 0 ${totalModules} ${totalModules}`}
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={className}
+      onClick={onClick}
+      className={`${onClick ? 'cursor-pointer' : ''} ${className}`}
       role="img"
-      aria-label={`QR Code for ${value}`}
+      aria-label={`Scannable QR Code for ${value}`}
     >
       <rect width={totalModules} height={totalModules} rx="1.5" fill="#FFFFFF" />
-      {grid.map((row, rIdx) =>
-        row.map((cell, cIdx) =>
-          cell ? (
-            <rect
-              key={`${rIdx}-${cIdx}`}
-              x={cIdx + quietZone}
-              y={rIdx + quietZone}
-              width={1}
-              height={1}
-              fill="#0F172A"
-            />
-          ) : null
-        )
-      )}
+      {qrData.cells.map(({ r, c }) => (
+        <rect
+          key={`${r}-${c}`}
+          x={c + quietZone}
+          y={r + quietZone}
+          width={1.03}
+          height={1.03}
+          fill="#0F172A"
+        />
+      ))}
     </svg>
   );
 };

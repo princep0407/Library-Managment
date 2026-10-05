@@ -43,18 +43,18 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
             Single-Floor Study Hall — Auto (1-by-1) & Manual Seat Board
           </h1>
-          <p className="text-xs text-stone-600 mt-1">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
             Apni library ek hi floor pe hai (S-01 to S-{seats.length}) · Entry par sequential vacant seat automatic assign hoti hai, ya kisi bhi seat card pe tap karke manual assign karein
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="px-3.5 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-xs font-mono tabular-nums text-indigo-950">
-            Next Auto-Assign Queue:{' '}
-            <strong className="text-indigo-700">
+          <div className="px-3.5 py-2 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 rounded-lg text-xs font-mono tabular-nums text-indigo-950 dark:text-indigo-200">
+            Next Auto Queue:{' '}
+            <strong className="text-indigo-600 dark:text-indigo-400">
               {nextAutoSeat
                 ? `${nextAutoSeat.code} (${nextAutoSeat.rowZone})`
                 : 'Hall Full'}
@@ -62,7 +62,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
           </div>
           <button
             onClick={onOpenAddSeatModal}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-stone-900 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap"
+            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Seat on Floor</span>
@@ -71,32 +71,32 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
       </div>
 
       {/* Quick Auto 1-by-1 Entry Bar + Single-Floor Row Filters */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-4">
-        {/* Auto 1-by-1 Quick Entry Trigger */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-stone-200/80">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-slate-200/80 dark:border-slate-800">
           <div className="flex items-center gap-2 text-xs">
-            <Armchair className="w-4 h-4 text-indigo-700" />
-            <span className="font-semibold text-stone-900">
+            <Armchair className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="font-semibold text-slate-900 dark:text-white">
               Test 1-by-1 Auto Seat Assignment on Entry:
             </span>
-            <span className="text-stone-500">
-              Select a member arriving at the gate to scan Face ID & auto-assign{' '}
-              <strong className="font-mono text-indigo-700">
+            <span className="text-slate-500 dark:text-slate-400">
+              Select arriving member to scan Face ID & auto-assign{' '}
+              <strong className="font-mono text-indigo-600 dark:text-indigo-400">
                 {nextAutoSeat?.code || 'next seat'}
               </strong>
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={quickEntryMemberId}
               onChange={(e) => setQuickEntryMemberId(e.target.value)}
-              className="px-3 py-1.5 text-xs bg-stone-50 border border-stone-300 rounded-lg"
+              className="px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
             >
               <option value="">-- Select Arriving Member --</option>
               {outsideMembers.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.name} ({m.id}) · Bal: ₹{m.walletBalance}
+                  {m.name} ({m.id}) · {m.totalHoursUsed.toFixed(1)}h · Bal: ₹
+                  {m.walletBalance}
                 </option>
               ))}
             </select>
@@ -109,7 +109,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
                   setQuickEntryMemberId('');
                 }
               }}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg disabled:opacity-40 transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-40 transition-colors whitespace-nowrap"
             >
               <ScanFace className="w-3.5 h-3.5" />
               <span>Face ID Entry → Auto Assign {nextAutoSeat?.code}</span>
@@ -119,7 +119,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
 
         {/* Single-Floor Row Filter & Status Filter */}
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-lg overflow-x-auto">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-x-auto max-w-full">
             {(
               [
                 'All',
@@ -134,8 +134,8 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
                 onClick={() => setRowFilter(r)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                   rowFilter === r
-                    ? 'bg-white text-stone-900 shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900'
+                    ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 {r === 'All' ? `Entire Single Floor (${seats.length})` : r}
@@ -143,7 +143,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
             ))}
           </div>
 
-          <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-lg">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
             {(['All', 'Vacant', 'Occupied', 'Reserved'] as const).map((st) => {
               const cnt =
                 st === 'All'
@@ -155,8 +155,8 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
                   onClick={() => setStatusFilter(st)}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                     statusFilter === st
-                      ? 'bg-white text-stone-900 shadow-xs'
-                      : 'text-stone-600 hover:text-stone-900'
+                      ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   {st} ({cnt})
@@ -176,27 +176,29 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
           const isNextAuto = nextAutoSeat?.id === seat.id;
 
           let cardStyle =
-            'bg-white border-emerald-300 hover:border-emerald-500';
+            'bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-800 hover:border-emerald-500';
           let stateText = isNextAuto
             ? 'Vacant · Next Auto #1'
             : 'Vacant · Available';
-          let stateColor = isNextAuto ? 'text-indigo-700' : 'text-emerald-700';
+          let stateColor = isNextAuto
+            ? 'text-indigo-600 dark:text-indigo-400'
+            : 'text-emerald-600 dark:text-emerald-400';
 
           if (seat.status === 'Occupied') {
             cardStyle =
-              'bg-stone-900 text-white border-stone-900 hover:bg-stone-800';
+              'bg-slate-900 dark:bg-indigo-950/80 text-white border-slate-900 dark:border-indigo-700 hover:bg-slate-800';
             stateText = occupant ? occupant.name : 'Occupied';
             stateColor = 'text-amber-300';
           } else if (seat.status === 'Reserved') {
             cardStyle =
-              'bg-amber-50/80 border-amber-300 hover:border-amber-500';
+              'bg-amber-50/80 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 hover:border-amber-500';
             stateText = seat.reservedFor
               ? `Hold: ${seat.reservedFor.name}`
               : 'Reserved';
-            stateColor = 'text-amber-900';
+            stateColor = 'text-amber-800 dark:text-amber-300';
           } else if (isNextAuto) {
             cardStyle =
-              'bg-indigo-50/60 border-indigo-400 ring-2 ring-indigo-600/30 hover:border-indigo-600';
+              'bg-indigo-50/60 dark:bg-indigo-950/40 border-indigo-400 ring-2 ring-indigo-500/30';
           }
 
           return (
@@ -216,7 +218,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
                       className={
                         seat.status === 'Occupied'
                           ? 'text-sky-300'
-                          : 'text-sky-600'
+                          : 'text-sky-600 dark:text-sky-400'
                       }
                     >
                       <Wind className="w-3.5 h-3.5" />
@@ -228,7 +230,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
                       className={
                         seat.status === 'Occupied'
                           ? 'text-amber-300'
-                          : 'text-stone-500'
+                          : 'text-slate-500 dark:text-slate-400'
                       }
                     >
                       <Plug className="w-3.5 h-3.5" />
@@ -244,8 +246,8 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
                 <p
                   className={`text-[11px] font-mono tabular-nums mt-0.5 ${
                     seat.status === 'Occupied'
-                      ? 'text-stone-300'
-                      : 'text-stone-500'
+                      ? 'text-slate-300'
+                      : 'text-slate-500 dark:text-slate-400'
                   }`}
                 >
                   {occupant
@@ -259,8 +261,8 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
               <div
                 className={`pt-2 border-t flex items-center justify-between text-[10px] font-mono tabular-nums ${
                   seat.status === 'Occupied'
-                    ? 'border-stone-800 text-stone-400'
-                    : 'border-stone-200/70 text-stone-500'
+                    ? 'border-slate-800 text-slate-400'
+                    : 'border-slate-200/70 dark:border-slate-800 text-slate-500'
                 }`}
               >
                 <span>
@@ -268,7 +270,7 @@ export const SeatBoardSection: React.FC<SeatBoardSectionProps> = ({
                     ? seat.assignmentType || 'Auto-Entry'
                     : `Seq #${seat.sequenceOrder}`}
                 </span>
-                <span>Tap to Manage</span>
+                <span>Manage</span>
               </div>
             </button>
           );
