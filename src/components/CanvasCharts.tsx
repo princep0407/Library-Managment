@@ -215,8 +215,9 @@ export const LiveSeatOccupancyDonut: React.FC<DonutChartProps> = ({ seats }) => 
   const occupied = seats.filter((s) => s.status === 'Occupied').length;
   const reserved = seats.filter((s) => s.status === 'Reserved').length;
   const vacant = seats.filter((s) => s.status === 'Vacant').length;
-  const total = Math.max(1, seats.length);
-  const occupancyPct = Math.round((occupied / total) * 100);
+  const totalCount = seats.length;
+  const total = Math.max(1, totalCount);
+  const occupancyPct = totalCount > 0 ? Math.round((occupied / totalCount) * 100) : 0;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -236,10 +237,17 @@ export const LiveSeatOccupancyDonut: React.FC<DonutChartProps> = ({ seats }) => 
     const radius = 64;
     const thickness = 18;
 
+    // Base ring when empty
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = thickness;
+    ctx.stroke();
+
     const segments = [
-      { count: occupied, color: '#3730a3' }, // Occupied: Deep Indigo
-      { count: reserved, color: '#d97706' }, // Reserved: Amber
-      { count: vacant, color: '#16a34a' }, // Vacant: Emerald
+      { count: occupied, color: '#4f46e5' }, // Occupied: Indigo
+      { count: reserved, color: '#f59e0b' }, // Reserved: Amber
+      { count: vacant, color: '#10b981' }, // Vacant: Emerald
     ];
 
     let startAngle = -Math.PI / 2;
@@ -251,23 +259,6 @@ export const LiveSeatOccupancyDonut: React.FC<DonutChartProps> = ({ seats }) => 
       ctx.strokeStyle = seg.color;
       ctx.lineWidth = thickness;
       ctx.lineCap = 'butt';
-      ctx.stroke();
-      startAngle += sliceAngle;
-    });
-
-    startAngle = -Math.PI / 2;
-    segments.forEach((seg) => {
-      if (seg.count <= 0) return;
-      const sliceAngle = (seg.count / total) * (Math.PI * 2);
-      const x1 = cx + (radius - thickness / 2 - 1) * Math.cos(startAngle);
-      const y1 = cy + (radius - thickness / 2 - 1) * Math.sin(startAngle);
-      const x2 = cx + (radius + thickness / 2 + 1) * Math.cos(startAngle);
-      const y2 = cy + (radius + thickness / 2 + 1) * Math.sin(startAngle);
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
       ctx.stroke();
       startAngle += sliceAngle;
     });
@@ -285,39 +276,39 @@ export const LiveSeatOccupancyDonut: React.FC<DonutChartProps> = ({ seats }) => 
       <div className="relative w-[168px] h-[168px] shrink-0 flex items-center justify-center">
         <canvas ref={canvasRef} className="w-[168px] h-[168px] block" />
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-2xl font-bold font-mono tabular-nums text-stone-900">
+          <span className="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-white">
             {occupancyPct}%
           </span>
-          <span className="text-[11px] text-stone-500">Single Floor</span>
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">Single Floor</span>
         </div>
       </div>
 
       <div className="flex-1 w-full space-y-3">
-        <div className="grid grid-cols-3 gap-2 pb-3 border-b border-stone-200/80 text-xs">
+        <div className="grid grid-cols-3 gap-2 pb-3 border-b border-slate-200/80 dark:border-slate-800 text-xs">
           <div>
-            <div className="flex items-center gap-1.5 text-stone-500">
-              <span className="w-2 h-2 rounded-xs bg-indigo-800" />
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <span className="w-2 h-2 rounded-xs bg-indigo-600" />
               <span>Occupied</span>
             </div>
-            <p className="font-mono tabular-nums font-semibold text-sm text-stone-900 mt-0.5">
-              {occupied} <span className="text-xs font-normal text-stone-400">/ {total}</span>
+            <p className="font-mono tabular-nums font-semibold text-sm text-slate-900 dark:text-white mt-0.5">
+              {occupied} <span className="text-xs font-normal text-slate-400">/ {totalCount}</span>
             </p>
           </div>
           <div>
-            <div className="flex items-center gap-1.5 text-stone-500">
-              <span className="w-2 h-2 rounded-xs bg-emerald-600" />
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <span className="w-2 h-2 rounded-xs bg-emerald-500" />
               <span>Vacant</span>
             </div>
-            <p className="font-mono tabular-nums font-semibold text-sm text-emerald-700 mt-0.5">
+            <p className="font-mono tabular-nums font-semibold text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">
               {vacant}
             </p>
           </div>
           <div>
-            <div className="flex items-center gap-1.5 text-stone-500">
-              <span className="w-2 h-2 rounded-xs bg-amber-600" />
+            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <span className="w-2 h-2 rounded-xs bg-amber-500" />
               <span>Reserved</span>
             </div>
-            <p className="font-mono tabular-nums font-semibold text-sm text-amber-700 mt-0.5">
+            <p className="font-mono tabular-nums font-semibold text-sm text-amber-600 dark:text-amber-400 mt-0.5">
               {reserved}
             </p>
           </div>
@@ -331,12 +322,12 @@ export const LiveSeatOccupancyDonut: React.FC<DonutChartProps> = ({ seats }) => 
             const pct = rowTotal > 0 ? Math.round((rowOcc / rowTotal) * 100) : 0;
             return (
               <div key={r} className="flex items-center justify-between text-xs">
-                <span className="text-stone-600">{r}</span>
+                <span className="text-slate-600 dark:text-slate-400">{r}</span>
                 <div className="flex items-center gap-2 font-mono tabular-nums">
-                  <span className="text-stone-900 font-medium">
+                  <span className="text-slate-900 dark:text-white font-medium">
                     {rowOcc}/{rowTotal}
                   </span>
-                  <span className="text-stone-400 w-9 text-right">{pct}%</span>
+                  <span className="text-slate-400 w-9 text-right">{pct}%</span>
                 </div>
               </div>
             );

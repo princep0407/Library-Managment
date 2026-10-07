@@ -23,6 +23,7 @@ import {
   Locker,
 } from '../types';
 import { QrCodeSvg } from './QrCodeSvg';
+import { PUBLIC_APP_URL } from '../data/initialData';
 import { FaceTemplateCaptureBox } from './FaceTemplateCaptureBox';
 
 interface MemberProfileModalProps {
@@ -69,6 +70,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
   const [editAddress, setEditAddress] = useState('');
   const [editIdProof, setEditIdProof] = useState('');
   const [editFaceTemplateId, setEditFaceTemplateId] = useState('');
+  const [editFacePhotoUrl, setEditFacePhotoUrl] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     setIsEditing(initialEditMode);
@@ -87,6 +89,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
       setEditAddress(member.address);
       setEditIdProof(member.idProof);
       setEditFaceTemplateId(member.faceTemplateId || '');
+      setEditFacePhotoUrl(member.facePhotoUrl);
     }
   }, [member, initialEditMode]);
 
@@ -108,12 +111,14 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
     (l) => l.status === 'Vacant' || l.id === member.lockerId
   );
 
-  const handleDirectFaceCapture = (newTemplateId: string) => {
+  const handleDirectFaceCapture = (newTemplateId: string, photoUrl?: string) => {
     setEditFaceTemplateId(newTemplateId);
+    if (photoUrl) setEditFacePhotoUrl(photoUrl);
     const updated: Member = {
       ...member,
       faceRegistered: true,
       faceTemplateId: newTemplateId,
+      facePhotoUrl: photoUrl || member.facePhotoUrl,
     };
     onSaveMemberEdit(updated);
   };
@@ -139,6 +144,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
       idProof: editIdProof.trim(),
       faceRegistered: Boolean(editFaceTemplateId || member.faceTemplateId),
       faceTemplateId: editFaceTemplateId || member.faceTemplateId,
+      facePhotoUrl: editFacePhotoUrl || member.facePhotoUrl,
       status:
         Number(editWalletBalance) < 100 && member.status === 'Active'
           ? 'Low Balance'
@@ -151,45 +157,55 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
     setIsEditing(false);
   };
 
-  const gateQrUrl = `${window.location.origin}/?gate=scan&memberId=${encodeURIComponent(
+  const gateQrUrl = `${PUBLIC_APP_URL}/?portal=member&gate=scan&memberId=${encodeURIComponent(
     member.id
   )}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-5xl shadow-2xl overflow-hidden my-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden my-auto animate-scale-in">
         {/* Top Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-900 dark:bg-slate-950 text-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-indigo-50 via-white to-emerald-50/60 dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center font-bold text-sm font-mono shrink-0">
-              {member.name
-                .split(' ')
-                .map((n) => n[0])
-                .join('')
-                .slice(0, 2)}
-            </div>
+            {member.facePhotoUrl ? (
+              <img
+                src={member.facePhotoUrl}
+                alt={member.name}
+                className="w-11 h-11 rounded-xl object-cover border-2 border-indigo-500 shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm font-mono shrink-0">
+                {member.name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .join('')
+                  .slice(0, 2)}
+              </div>
+            )}
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base font-bold text-white">{member.name}</h3>
-                <span className="text-xs font-mono tabular-nums text-amber-400 font-semibold">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  {member.name}
+                </h3>
+                <span className="text-xs font-mono tabular-nums text-indigo-600 dark:text-amber-400 font-semibold">
                   {member.id}
                 </span>
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-300">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
                   <span
                     className={`w-2 h-2 rounded-full ${
                       member.status === 'Active'
-                        ? 'bg-emerald-400'
+                        ? 'bg-emerald-500'
                         : member.status === 'Low Balance'
-                        ? 'bg-amber-400'
-                        : 'bg-rose-400'
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
                     }`}
                   />
                   {member.status}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                 {member.examPrep} · +91 {member.phone} · Login Pass:{' '}
-                <span className="font-mono text-amber-300">
+                <span className="font-mono font-bold text-indigo-700 dark:text-amber-300">
                   {member.password || '123456'}
                 </span>
               </p>
@@ -199,10 +215,10 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setIsEditing((prev) => !prev)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
                 isEditing
-                  ? 'bg-slate-700 text-white'
-                  : 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
+                  ? 'bg-slate-800 text-white'
+                  : 'bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700'
               }`}
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -214,7 +230,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
                 onClose();
                 onOpenFaceScanForMember(member);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
             >
               <ScanFace className="w-3.5 h-3.5" />
               <span>
@@ -227,7 +243,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
                 onClose();
                 onInitiateRenewal(member);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
             >
               <CreditCard className="w-3.5 h-3.5" />
               <span>Recharge Wallet</span>
@@ -235,7 +251,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
+              className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
               aria-label="Close member profile"
             >
               <X className="w-4 h-4" />
@@ -267,7 +283,11 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
             <FaceTemplateCaptureBox
               memberId={member.id}
               currentTemplateId={editFaceTemplateId}
-              onCaptureComplete={(newId) => setEditFaceTemplateId(newId)}
+              currentPhotoUrl={editFacePhotoUrl}
+              onCaptureComplete={(newId, photoUrl) => {
+                setEditFaceTemplateId(newId);
+                if (photoUrl) setEditFacePhotoUrl(photoUrl);
+              }}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -482,6 +502,7 @@ export const MemberProfileModal: React.FC<MemberProfileModalProps> = ({
               <FaceTemplateCaptureBox
                 memberId={member.id}
                 currentTemplateId={member.faceTemplateId}
+                currentPhotoUrl={member.facePhotoUrl}
                 onCaptureComplete={handleDirectFaceCapture}
               />
 

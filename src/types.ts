@@ -50,6 +50,7 @@ export interface Member {
   lockerId: string | null; // e.g., L-01
   faceRegistered: boolean;
   faceTemplateId: string; // e.g., FACE-BIO-1001-9A4F
+  facePhotoUrl?: string; // Captured webcam snapshot data URL for visual + biometric verification
   password?: string; // Member portal login password
   idProof: string;
   address: string;

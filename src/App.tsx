@@ -23,6 +23,9 @@ import {
   Pencil,
   UserCircle,
   Smartphone,
+  LogOut,
+  AlertTriangle,
+  Globe,
 } from 'lucide-react';
 import {
   Member,
@@ -40,6 +43,7 @@ import {
 } from './types';
 import {
   TODAY_STR,
+  PUBLIC_APP_URL,
   INITIAL_MEMBERS,
   INITIAL_SEATS,
   INITIAL_LOCKERS,
@@ -65,6 +69,7 @@ import {
   exportFinanceToCsv,
   triggerPrintPdfReport,
 } from './utils/exportUtils';
+import { AppLang, TRANSLATIONS } from './utils/i18n';
 
 type NavTab =
   | 'dashboard'
@@ -75,7 +80,7 @@ type NavTab =
   | 'member-portal';
 type ReportRange = 'Weekly' | 'Monthly' | 'Quarterly' | '6M / Yearly';
 
-const STORAGE_KEY = 'vidyakosh_library_state_v3';
+const STORAGE_KEY = 'vidyakosh_library_state_clean_v5';
 
 function addMonthsToDate(dateStr: string, months: number): string {
   const base =
@@ -89,21 +94,41 @@ function addMonthsToDate(dateStr: string, months: number): string {
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
-      const saved = localStorage.getItem('vidyakosh_theme');
+      const saved = localStorage.getItem('vidyakosh_theme_light_v2');
       if (saved === 'dark' || saved === 'light') return saved;
     } catch {
       // ignore
     }
-    return 'dark';
+    return 'light';
   });
 
   useEffect(() => {
     try {
-      localStorage.setItem('vidyakosh_theme', theme);
+      localStorage.setItem('vidyakosh_theme_light_v2', theme);
     } catch {
       // ignore
     }
   }, [theme]);
+
+  const [lang, setLang] = useState<AppLang>(() => {
+    try {
+      const saved = localStorage.getItem('vidyakosh_lang_v1');
+      if (saved === 'gu' || saved === 'en') return saved;
+    } catch {
+      // ignore
+    }
+    return 'en';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('vidyakosh_lang_v1', lang);
+    } catch {
+      // ignore
+    }
+  }, [lang]);
+
+  const t = TRANSLATIONS[lang];
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [loggedInMemberId, setLoggedInMemberId] = useState<string | null>(null);
@@ -115,7 +140,20 @@ export default function App() {
     phone: '9811002244',
     email: 'admin@vidyakoshlibrary.in',
     address: '2nd Cross, Mukherjee Nagar Reading Hub, New Delhi',
+    adminPin: '1234',
   });
+
+  // Ensure any legacy cached demo data keys are cleared on load
+  useEffect(() => {
+    try {
+      localStorage.removeItem('vidyakosh_library_state_v1');
+      localStorage.removeItem('vidyakosh_library_state_v2');
+      localStorage.removeItem('vidyakosh_library_state_v3');
+      localStorage.removeItem('vidyakosh_library_state_clean_v4');
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const [members, setMembers] = useState<Member[]>(() => {
     try {
@@ -206,8 +244,8 @@ export default function App() {
     }
   }, [members, seats, lockers, payments, expenses, attendance, notices]);
 
-  // Navigation & Modal States
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  // Navigation & Modal States (First Page is always Member Login Page)
+  const [activeTab, setActiveTab] = useState<NavTab>('member-portal');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState<FeePayment | null>(
     null
@@ -221,15 +259,15 @@ export default function App() {
   >(null);
   const [faceScanMember, setFaceScanMember] = useState<Member | null>(null);
 
-  // Handle URL query parameter `?gate=scan` when someone scans the Common Gate QR with their mobile phone!
+  // Handle URL query parameter `?gate=scan` or `?portal=member` when a student scans the Common Gate QR or opens the Student Link
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('gate') === 'scan') {
-      setActiveTab('attendance');
+    if (params.get('portal') === 'member' || params.get('gate') === 'scan') {
+      setActiveTab('member-portal');
       const mId = params.get('memberId');
-      const target =
-        (mId && members.find((m) => m.id === mId)) || members[0] || null;
+      const target = (mId && members.find((m) => m.id === mId)) || null;
       if (target) {
+        setLoggedInMemberId(target.id);
         setFaceScanMember(target);
       }
     }
@@ -260,7 +298,9 @@ export default function App() {
   const [newSeatHasSocket, setNewSeatHasSocket] = useState(true);
 
   // Fast Fee / Wallet Recharge States
-  const [feeMemberId, setFeeMemberId] = useState<string>(INITIAL_MEMBERS[1].id);
+  const [feeMemberId, setFeeMemberId] = useState<string>(
+    INITIAL_MEMBERS[0]?.id || ''
+  );
   const [feePlan, setFeePlan] = useState<PlanType>('Monthly');
   const [feeCustomMonths] = useState<number>(2);
   const [feeDiscount, setFeeDiscount] = useState<number>(0);
@@ -376,11 +416,12 @@ export default function App() {
     seatId: string | null;
     assignMode: 'Auto (1-by-1)' | 'Manual';
     faceScore: number;
+    capturedPhotoUrl?: string;
   }) => {
     const member = members.find((m) => m.id === payload.memberId);
     if (!member) return;
 
-    const assignedSeatCode = payload.seatId || nextAutoSeat?.id || null;
+    const assignedSeatCode = payload.seatId || nextAutoSeat?.id || 'S-01';
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
@@ -416,8 +457,25 @@ export default function App() {
     setAttendance((prev) => [newRec, ...prev]);
 
     if (assignedSeatCode) {
-      setSeats((prev) =>
-        prev.map((s) =>
+      setSeats((prev) => {
+        const exists = prev.some((s) => s.id === assignedSeatCode);
+        if (!exists) {
+          const newSeat: Seat = {
+            id: assignedSeatCode,
+            code: assignedSeatCode,
+            sequenceOrder: prev.length + 1,
+            rowZone: 'Row A (AC Prime)',
+            status: 'Occupied',
+            memberId: member.id,
+            assignmentType:
+              payload.assignMode === 'Auto (1-by-1)' ? 'Auto-Entry' : 'Manual',
+            hasAC: true,
+            hasSocket: true,
+            hourlyRateAddon: 0,
+          };
+          return [...prev, newSeat];
+        }
+        return prev.map((s) =>
           s.id === assignedSeatCode
             ? {
                 ...s,
@@ -430,8 +488,8 @@ export default function App() {
                 reservedFor: undefined,
               }
             : s
-        )
-      );
+        );
+      });
       setMembers((prev) =>
         prev.map((m) =>
           m.id === member.id
@@ -440,6 +498,7 @@ export default function App() {
                 seatId: assignedSeatCode,
                 seatAssignmentMode:
                   payload.assignMode === 'Auto (1-by-1)' ? 'Auto' : 'Manual',
+                facePhotoUrl: m.facePhotoUrl || payload.capturedPhotoUrl,
               }
             : m
         )
@@ -456,6 +515,7 @@ export default function App() {
     memberId: string;
     overrideDurationMinutes?: number;
     faceScore: number;
+    capturedPhotoUrl?: string;
   }) => {
     const member = members.find((m) => m.id === payload.memberId);
     const openSession = attendance.find(
@@ -1008,6 +1068,77 @@ export default function App() {
   const activeMembersCount = members.filter((m) => m.status === 'Active').length;
   const occupiedSeatsCount = seats.filter((s) => s.status === 'Occupied').length;
   const vacantSeatsCount = seats.filter((s) => s.status === 'Vacant').length;
+  const seatOccupancyPct =
+    seats.length > 0 ? Math.round((occupiedSeatsCount / seats.length) * 100) : 0;
+  const isOvercrowded =
+    seats.length > 0 && (occupiedSeatsCount / seats.length) * 100 > 90;
+
+  const [overcrowdingBannerDismissed, setOvercrowdingBannerDismissed] =
+    useState(false);
+  const [overcrowdingToastOpen, setOvercrowdingToastOpen] = useState(false);
+
+  // Trigger Overcrowding Alert Banner & Toast automatically whenever seat occupancy exceeds 90%
+  useEffect(() => {
+    if (isOvercrowded) {
+      setOvercrowdingBannerDismissed(false);
+      setOvercrowdingToastOpen(true);
+      const timer = setTimeout(() => {
+        setOvercrowdingToastOpen(false);
+      }, 9000);
+      return () => clearTimeout(timer);
+    } else {
+      setOvercrowdingToastOpen(false);
+    }
+  }, [isOvercrowded, occupiedSeatsCount, seats.length]);
+
+  const handleSimulateOvercrowdingAlert = () => {
+    setSeats((prev) => {
+      const baseSeats: Seat[] =
+        prev.length >= 10
+          ? [...prev]
+          : Array.from({ length: 10 }, (_, idx) => {
+              const existing = prev[idx];
+              if (existing) return existing;
+              const seq = idx + 1;
+              const code = `S-${String(seq).padStart(2, '0')}`;
+              const rows: SingleFloorRow[] = [
+                'Row A (AC Prime)',
+                'Row B (AC Standard)',
+                'Row C (Silent Zone)',
+                'Row D (Cabin Desk)',
+              ];
+              return {
+                id: code,
+                code,
+                sequenceOrder: seq,
+                rowZone: rows[idx % rows.length],
+                status: 'Vacant',
+                memberId: null,
+                hasAC: true,
+                hasSocket: true,
+                hourlyRateAddon: 0,
+              };
+            });
+
+      // Mark 95%+ (or 10/10 = 100%) seats as Occupied so total occupancy exceeds 90%
+      const targetOccupied = Math.max(
+        Math.ceil(baseSeats.length * 0.95),
+        baseSeats.length
+      );
+      return baseSeats.map((s, i) =>
+        i < targetOccupied
+          ? {
+              ...s,
+              status: 'Occupied',
+              assignmentType: s.assignmentType || 'Auto-Entry',
+            }
+          : s
+      );
+    });
+    setOvercrowdingBannerDismissed(false);
+    setOvercrowdingToastOpen(true);
+  };
+
   const occupiedLockersCount = lockers.filter(
     (l) => l.status === 'Occupied'
   ).length;
@@ -1026,11 +1157,11 @@ export default function App() {
     : null;
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'members', label: 'Members Directory', icon: Users },
-    { id: 'seats', label: 'Single-Floor Seats', icon: Armchair },
-    { id: 'finance', label: 'Wallet & Finance', icon: Wallet },
-    { id: 'attendance', label: 'QR + Face ID Gate', icon: ScanFace },
+    { id: 'dashboard', label: t.navDashboard, icon: LayoutDashboard },
+    { id: 'members', label: t.navMembers, icon: Users },
+    { id: 'seats', label: t.navSeats, icon: Armchair },
+    { id: 'finance', label: t.navFinance, icon: Wallet },
+    { id: 'attendance', label: t.navAttendance, icon: ScanFace },
     { id: 'member-portal', label: 'Student Login Portal', icon: Smartphone },
   ] as const;
 
@@ -1100,20 +1231,21 @@ export default function App() {
 
   return (
     <div className={theme === 'dark' ? 'dark' : ''}>
-      <div className="min-h-screen bg-[#F7F5F0] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex transition-colors duration-150">
+      <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex transition-colors duration-200">
         {/* Mobile Backdrop */}
         {mobileMenuOpen && (
           <div
             onClick={() => setMobileMenuOpen(false)}
-            className="fixed inset-0 z-30 bg-slate-950/60 backdrop-blur-xs md:hidden"
+            className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-xs md:hidden"
           />
         )}
 
         {/* ========================================================= */}
-        {/* COLLAPSIBLE LEFT SIDEBAR NAVIGATION */}
+        {/* COLLAPSIBLE LEFT SIDEBAR NAVIGATION (Hidden in Member-Only Mode) */}
         {/* ========================================================= */}
+        {activeTab !== 'member-portal' && (
         <aside
-          className={`fixed inset-y-0 left-0 z-40 bg-slate-900 dark:bg-slate-950 text-slate-200 flex flex-col justify-between border-r border-slate-800 transition-all duration-150 md:static md:shrink-0 ${
+          className={`fixed inset-y-0 left-0 z-40 bg-white dark:bg-slate-950 text-slate-700 dark:text-slate-200 flex flex-col justify-between border-r border-slate-200/90 dark:border-slate-800 shadow-xs transition-all duration-200 md:static md:shrink-0 ${
             sidebarCollapsed ? 'md:w-18' : 'md:w-64'
           } ${
             mobileMenuOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'
@@ -1121,21 +1253,26 @@ export default function App() {
         >
           <div className="p-4 space-y-6">
             {/* Brand Header + Collapse Toggle */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3.5">
               {!sidebarCollapsed && (
-                <div className="min-w-0">
-                  <span className="text-lg font-bold tracking-tight text-white block truncate">
-                    VidyaKosh
-                  </span>
-                  <span className="text-[11px] text-amber-400 font-mono tabular-nums block truncate">
-                    Single-Floor Biometric Hall
-                  </span>
+                <div className="min-w-0 flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
+                    VK
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-base font-bold tracking-tight text-slate-900 dark:text-white block truncate">
+                      {t.appName}
+                    </span>
+                    <span className="text-[11px] text-indigo-600 dark:text-amber-400 font-mono tabular-nums block truncate">
+                      {t.adminConsole}
+                    </span>
+                  </div>
                 </div>
               )}
 
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="hidden md:flex p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors mx-auto"
+                className="hidden md:flex p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors mx-auto cursor-pointer"
                 title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
               >
                 {sidebarCollapsed ? (
@@ -1147,7 +1284,7 @@ export default function App() {
 
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="md:hidden p-1 text-slate-400 hover:text-white"
+                className="md:hidden p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1155,74 +1292,96 @@ export default function App() {
 
             {/* Navigation Items */}
             <nav className="space-y-1.5">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    title={item.label}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3.5'
-                    } py-2.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                      isActive
-                        ? 'bg-indigo-600 text-white font-semibold shadow-sm'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {!sidebarCollapsed && <span>{item.label}</span>}
-                  </button>
-                );
-              })}
+              {navItems
+                .filter((item) => item.id !== 'member-portal')
+                .map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      title={item.label}
+                      className={`w-full flex items-center ${
+                        sidebarCollapsed ? 'justify-center px-2' : 'gap-3 px-3.5'
+                      } py-2.5 rounded-xl text-xs font-medium transition-all duration-150 whitespace-nowrap cursor-pointer ${
+                        isActive
+                          ? 'bg-indigo-600 text-white font-semibold shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {!sidebarCollapsed && <span>{item.label}</span>}
+                    </button>
+                  );
+                })}
             </nav>
 
             {/* Live Gate Status Card (When Expanded) */}
             {!sidebarCollapsed && (
-              <div className="p-3.5 bg-slate-800/70 border border-slate-800 rounded-xl space-y-2.5 text-xs">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span>Next Auto Seat</span>
-                  <span className="font-mono tabular-nums font-bold text-amber-400">
-                    {nextAutoSeat ? nextAutoSeat.code : 'Full'}
+              <div className="p-3.5 bg-indigo-50/70 dark:bg-slate-800/70 border border-indigo-100 dark:border-slate-800 rounded-xl space-y-2.5 text-xs">
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                  <span>{t.nextAutoSeat}</span>
+                  <span className="font-mono tabular-nums font-bold text-indigo-700 dark:text-amber-400">
+                    {nextAutoSeat ? nextAutoSeat.code : 'S-01'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-slate-400">
-                  <span>Inside Hall Now</span>
-                  <span className="font-mono tabular-nums font-bold text-emerald-400">
-                    {currentlyInsideList.length} Active
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                  <span>{t.insideHallNow}</span>
+                  <span className="font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400">
+                    {currentlyInsideList.length} {t.active}
                   </span>
                 </div>
                 <button
-                  onClick={() => setFaceScanMember(members[0])}
-                  className="w-full py-2 px-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                  onClick={() => {
+                    if (members.length > 0) {
+                      setFaceScanMember(members[0]);
+                    } else {
+                      setActiveTab('attendance');
+                      triggerToast('Add a member first to scan at the gate');
+                    }
+                  }}
+                  className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <ScanFace className="w-3.5 h-3.5" />
-                  <span>Quick Gate Face Scan</span>
+                  <span>{t.quickGateFaceScan}</span>
                 </button>
               </div>
             )}
           </div>
 
           {/* Sidebar Bottom Controls */}
-          <div className="p-3.5 border-t border-slate-800 space-y-2">
+          <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            <button
+              onClick={() => setLang(lang === 'en' ? 'gu' : 'en')}
+              title="Switch Language (English / ગુજરાતી)"
+              className={`w-full flex items-center ${
+                sidebarCollapsed ? 'justify-center' : 'justify-between px-3'
+              } py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50/80 dark:bg-indigo-950/50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer`}
+            >
+              {!sidebarCollapsed && (
+                <span>{lang === 'en' ? 'ભાષા: ગુજરાતી' : 'Language: English'}</span>
+              )}
+              <Globe className="w-3.5 h-3.5 shrink-0" />
+            </button>
+
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               title="Toggle Dark / Light Theme"
               className={`w-full flex items-center ${
                 sidebarCollapsed ? 'justify-center' : 'justify-between px-3'
-              } py-2 text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-800 rounded-lg transition-colors`}
+              } py-2 text-xs font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer`}
             >
               {!sidebarCollapsed && (
-                <span>{theme === 'dark' ? 'Dark Theme' : 'Light Theme'}</span>
+                <span>{theme === 'dark' ? t.darkTheme : t.lightTheme}</span>
               )}
               {theme === 'dark' ? (
                 <Moon className="w-3.5 h-3.5 text-amber-400" />
               ) : (
-                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
               )}
             </button>
 
@@ -1231,29 +1390,46 @@ export default function App() {
               title="Library & Admin Profile"
               className={`w-full flex items-center ${
                 sidebarCollapsed ? 'justify-center' : 'justify-between px-3'
-              } py-2 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer`}
+              } py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer`}
             >
               {!sidebarCollapsed && (
                 <div className="text-left truncate">
-                  <p className="font-semibold text-white truncate">
+                  <p className="font-semibold text-slate-900 dark:text-white truncate">
                     {adminProfile.adminName}
                   </p>
-                  <p className="text-[10px] text-slate-400 truncate">
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                     {adminProfile.adminRole}
                   </p>
                 </div>
               )}
-              <UserCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <UserCircle className="w-4 h-4 text-indigo-600 dark:text-amber-400 shrink-0" />
+            </button>
+
+            <button
+              onClick={() => {
+                setLoggedInMemberId(null);
+                setActiveTab('member-portal');
+                triggerToast('Logged out of Admin Console');
+              }}
+              title="Logout to Login Screen"
+              className={`w-full flex items-center ${
+                sidebarCollapsed ? 'justify-center' : 'justify-between px-3'
+              } py-2 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer`}
+            >
+              {!sidebarCollapsed && <span>Admin Logout</span>}
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
             </button>
           </div>
         </aside>
+        )}
 
         {/* ========================================================= */}
         {/* MAIN WORKSPACE CANVAS */}
         {/* ========================================================= */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Top Contextual Header */}
-          <header className="sticky top-0 z-20 bg-[#F7F5F0]/95 dark:bg-slate-950/95 backdrop-blur-xs border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+          {/* Top Contextual Header (Hidden in Member-Only Mode so Students Cannot Access Admin Tabs) */}
+          {activeTab !== 'member-portal' && (
+          <header className="sticky top-0 z-20 bg-white/90 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <button
                 onClick={() => setMobileMenuOpen(true)}
@@ -1264,7 +1440,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="hidden md:flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg"
+                className="hidden md:flex p-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg cursor-pointer"
                 title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
               >
                 {sidebarCollapsed ? (
@@ -1274,7 +1450,7 @@ export default function App() {
                 )}
               </button>
               <div className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
-                <span className="hidden sm:inline">VidyaKosh Single-Floor</span>
+                <span className="hidden sm:inline">VidyaKosh Study Hall</span>
                 <span className="hidden sm:inline mx-2" aria-hidden="true">
                   /
                 </span>
@@ -1287,42 +1463,56 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setActiveTab('member-portal')}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
-                  activeTab === 'member-portal'
-                    ? 'bg-amber-400 text-slate-950 border-amber-400'
-                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Student Login Portal</span>
-              </button>
+              {/* Language Switcher (English / ગુજરાતી) */}
+              <div className="inline-flex items-center p-0.5 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setLang('en')}
+                  className={`px-2.5 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    lang === 'en'
+                      ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-white shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLang('gu')}
+                  className={`px-2.5 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                    lang === 'gu'
+                      ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-white shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  ગુજરાતી
+                </button>
+              </div>
 
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 {theme === 'dark' ? (
                   <>
                     <Sun className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="hidden lg:inline">Light</span>
+                    <span className="hidden lg:inline">{t.lightTheme}</span>
                   </>
                 ) : (
                   <>
                     <Moon className="w-3.5 h-3.5 text-indigo-600" />
-                    <span className="hidden lg:inline">Dark</span>
+                    <span className="hidden lg:inline">{t.darkTheme}</span>
                   </>
                 )}
               </button>
 
               <button
                 onClick={() => setIsAdminProfileOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 title="Admin & Library Profile"
               >
                 <UserCircle className="w-4 h-4 text-indigo-600 dark:text-amber-400" />
-                <span className="hidden sm:inline">Profile</span>
+                <span className="hidden sm:inline">{t.profile}</span>
               </button>
 
               <button
@@ -1330,12 +1520,26 @@ export default function App() {
                   setAdmissionPreselectedSeat(null);
                   setIsAdmissionOpen(true);
                 }}
-                className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 shadow-2xs transition-colors whitespace-nowrap cursor-pointer"
               >
-                + New Admission
+                {t.newAdmission}
+              </button>
+
+              <button
+                onClick={() => {
+                  setLoggedInMemberId(null);
+                  setActiveTab('member-portal');
+                  triggerToast('Logged out to Member Login Page');
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 transition-colors cursor-pointer"
+                title="Logout to Member Login Page"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{t.logout}</span>
               </button>
             </div>
           </header>
+          )}
 
           {/* Toast Feedback Banner */}
           {toastMsg && (
@@ -1345,32 +1549,174 @@ export default function App() {
             </div>
           )}
 
+          {/* Overcrowding >90% Threshold Floating Toast Notification (Admin Console) */}
+          {activeTab !== 'member-portal' &&
+            isOvercrowded &&
+            overcrowdingToastOpen && (
+              <div className="fixed top-18 right-5 z-50 max-w-md w-full bg-rose-600 text-white rounded-2xl p-4 shadow-2xl border-2 border-rose-300 animate-scale-in">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <AlertTriangle className="w-5 h-5 text-amber-200" />
+                    </div>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm">
+                          {lang === 'gu'
+                            ? '90% ઓવરક્રાઉડિંગ એલર્ટ!'
+                            : '90% Overcrowding Threshold Alert!'}
+                        </span>
+                        <span className="px-2 py-0.5 font-mono font-bold bg-amber-300 text-slate-950 rounded-md text-[11px]">
+                          {seatOccupancyPct}%
+                        </span>
+                      </div>
+                      <p className="text-rose-100 leading-relaxed">
+                        {t.overcrowdingToast(
+                          seatOccupancyPct,
+                          occupiedSeatsCount,
+                          seats.length
+                        )}
+                      </p>
+                      <div className="flex items-center gap-2 pt-1.5">
+                        <button
+                          onClick={() => {
+                            setActiveTab('seats');
+                            setOvercrowdingToastOpen(false);
+                          }}
+                          className="px-2.5 py-1 bg-white text-rose-700 font-bold rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          {t.inspectSeatsBtn}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsAddSeatOpen(true);
+                            setOvercrowdingToastOpen(false);
+                          }}
+                          className="px-2.5 py-1 bg-rose-800/80 text-white font-semibold rounded-lg hover:bg-rose-800 transition-colors cursor-pointer"
+                        >
+                          {t.addExtraSeatBtn}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setOvercrowdingToastOpen(false)}
+                    className="p-1 text-rose-200 hover:text-white rounded-lg cursor-pointer"
+                    aria-label="Close alert toast"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
           {/* Main Viewport */}
           <main className="flex-1 max-w-[1380px] w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
             {/* VIEW 1: DASHBOARD */}
             {activeTab === 'dashboard' && (
-              <div className="space-y-6">
+              <div className="space-y-6 animate-fade-in">
+                {/* Persistent Dashboard Overcrowding Alert Banner when Seat Occupancy > 90% */}
+                {isOvercrowded && !overcrowdingBannerDismissed && (
+                  <div className="p-4 sm:p-5 bg-gradient-to-r from-rose-50 via-amber-50/90 to-rose-50 dark:from-rose-950/70 dark:via-amber-950/50 dark:to-rose-950/70 border-2 border-rose-400 dark:border-rose-700 rounded-2xl shadow-md flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 animate-scale-in">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <AlertTriangle className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-sm sm:text-base font-bold text-rose-950 dark:text-rose-100">
+                            {t.overcrowdingTitle}
+                          </h2>
+                          <span className="px-2.5 py-0.5 text-xs font-mono font-bold bg-rose-600 text-white rounded-md">
+                            {seatOccupancyPct}% ({occupiedSeatsCount}/{seats.length})
+                          </span>
+                        </div>
+                        <p className="text-xs text-rose-800 dark:text-rose-200 leading-relaxed max-w-3xl">
+                          {t.overcrowdingSubtitle(
+                            seatOccupancyPct,
+                            occupiedSeatsCount,
+                            seats.length,
+                            vacantSeatsCount
+                          )}
+                        </p>
+                        {/* Live Progress Bar with 90% Threshold Marker */}
+                        <div className="pt-1 max-w-md">
+                          <div className="relative h-2.5 w-full bg-rose-200/80 dark:bg-rose-950 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-rose-600 rounded-full transition-all duration-300"
+                              style={{
+                                width: `${Math.min(100, seatOccupancyPct)}%`,
+                              }}
+                            />
+                            <div
+                              className="absolute top-0 bottom-0 w-0.5 bg-slate-900 dark:bg-white"
+                              style={{ left: '90%' }}
+                              title="90% Threshold"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setActiveTab('seats')}
+                        className="px-3.5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                      >
+                        {t.inspectSeatsBtn}
+                      </button>
+                      <button
+                        onClick={() => setIsAddSeatOpen(true)}
+                        className="px-3.5 py-2 text-xs font-semibold text-rose-900 dark:text-rose-100 bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                      >
+                        {t.addExtraSeatBtn}
+                      </button>
+                      <button
+                        onClick={() => setOvercrowdingBannerDismissed(true)}
+                        className="px-3 py-2 text-xs font-medium text-rose-700 dark:text-rose-300 hover:underline cursor-pointer"
+                      >
+                        {t.dismissAlert}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
                     <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                      Single-Floor Library & Biometric Wallet Dashboard
+                      {t.dashboardTitle}
                     </h1>
                     <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-                      Apni library ka pura status ek dashboard pe · Auto 1-by-1 Seat Queue:{' '}
+                      {t.dashboardSubtitle} · {t.nextAutoSeat}:{' '}
                       <strong className="font-mono text-indigo-600 dark:text-indigo-400">
                         {nextAutoSeat?.code || 'Full'}
-                      </strong>{' '}
-                      · Per-Hour Wallet Fee Deduction Active
+                      </strong>
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => setActiveTab('attendance')}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap"
-                  >
-                    <ScanFace className="w-4 h-4" />
-                    <span>Open Gate QR + Face ID Scanner</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isOvercrowded && (
+                      <button
+                        onClick={handleSimulateOvercrowdingAlert}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                        title="Simulate >90% Seat Occupancy to preview Overcrowding Banner & Toast"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                        <span>
+                          {lang === 'gu'
+                            ? '>90% ઓવરક્રાઉડિંગ એલર્ટ ટેસ્ટ'
+                            : 'Test >90% Overcrowding Alert'}
+                        </span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setActiveTab('attendance')}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
+                    >
+                      <ScanFace className="w-4 h-4" />
+                      <span>{t.openGateScanner}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* 4 Real-Time Stats Cards */}
@@ -1381,7 +1727,7 @@ export default function App() {
                   >
                     <div>
                       <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        Total Enrolled Members
+                        {t.totalEnrolledMembers}
                       </p>
                       <p className="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-white mt-1.5">
                         {members.length}
@@ -1389,11 +1735,11 @@ export default function App() {
                     </div>
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-mono tabular-nums">
                       <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                        {activeMembersCount} Active
+                        {activeMembersCount} {t.active}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span className="text-rose-600 dark:text-rose-400 font-medium">
-                        {lowBalanceMembers.length} Low Bal
+                        {lowBalanceMembers.length} {t.lowBal}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span className="text-indigo-600 dark:text-indigo-400 underline font-sans">
@@ -1404,12 +1750,27 @@ export default function App() {
 
                   <div
                     onClick={() => setActiveTab('seats')}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 cursor-pointer hover:border-indigo-500 transition-colors flex flex-col justify-between"
+                    className={`bg-white dark:bg-slate-900 border rounded-xl p-5 cursor-pointer transition-colors flex flex-col justify-between ${
+                      isOvercrowded
+                        ? 'border-rose-400 dark:border-rose-700 ring-2 ring-rose-500/20'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-indigo-500'
+                    }`}
                   >
                     <div>
-                      <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        Single-Floor Seats (Auto 1-by-1)
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                          {t.seatOccupancyCard}
+                        </p>
+                        <span
+                          className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded-md ${
+                            isOvercrowded
+                              ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                              : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300'
+                          }`}
+                        >
+                          {seatOccupancyPct}%
+                        </span>
+                      </div>
                       <p className="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-white mt-1.5">
                         {occupiedSeatsCount}{' '}
                         <span className="text-sm font-normal text-slate-400">
@@ -1419,11 +1780,21 @@ export default function App() {
                     </div>
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-mono tabular-nums">
                       <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                        {vacantSeatsCount} Free
+                        {vacantSeatsCount} {t.vacant}
                       </span>
                       <span aria-hidden="true">·</span>
-                      <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
-                        Next: {nextAutoSeat?.code || 'None'}
+                      <span
+                        className={`font-semibold ${
+                          isOvercrowded
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : 'text-indigo-600 dark:text-indigo-400'
+                        }`}
+                      >
+                        {isOvercrowded
+                          ? lang === 'gu'
+                            ? '>90% ભીડ!'
+                            : '>90% Alert!'
+                          : `Next: ${nextAutoSeat?.code || 'None'}`}
                       </span>
                     </div>
                   </div>
@@ -1434,7 +1805,7 @@ export default function App() {
                   >
                     <div>
                       <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        Personal Lockers
+                        {t.lockersAssignedCard}
                       </p>
                       <p className="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-white mt-1.5">
                         {occupiedLockersCount}{' '}
@@ -1445,7 +1816,7 @@ export default function App() {
                     </div>
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-mono tabular-nums">
                       <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                        {vacantLockersCount} Available
+                        {vacantLockersCount} {t.vacant}
                       </span>
                       <span className="text-indigo-600 dark:text-indigo-400 font-sans font-semibold underline">
                         Assign Locker →
@@ -1459,7 +1830,7 @@ export default function App() {
                   >
                     <div>
                       <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        Net Library Profit (₹)
+                        {t.netFinancialProfitCard}
                       </p>
                       <p className="text-2xl font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400 mt-1.5">
                         ₹{netProfitAllTime.toLocaleString('en-IN')}
@@ -1945,6 +2316,7 @@ export default function App() {
             {/* VIEW 3: SINGLE-FLOOR SEAT BOARD */}
             {activeTab === 'seats' && (
               <SeatBoardSection
+                lang={lang}
                 seats={seats}
                 members={members}
                 nextAutoSeat={nextAutoSeat}
@@ -1954,6 +2326,7 @@ export default function App() {
                 }}
                 onOpenAddSeatModal={() => setIsAddSeatOpen(true)}
                 onOpenFaceScanForMember={(m) => setFaceScanMember(m)}
+                onSimulateOvercrowding={handleSimulateOvercrowdingAlert}
               />
             )}
 
@@ -2234,22 +2607,29 @@ export default function App() {
               />
             )}
 
-            {/* VIEW 6: STUDENT LOGIN & SELF-REGISTRATION PORTAL */}
+            {/* VIEW 6: MEMBER LOGIN PORTAL */}
             {activeTab === 'member-portal' && (
               <MemberPortal
+                lang={lang}
+                onChangeLang={setLang}
                 members={members}
                 seats={seats}
                 attendance={attendance}
                 payments={payments}
-                nextMemberId={nextMemberId}
                 nextAutoSeat={nextAutoSeat}
                 loggedInMemberId={loggedInMemberId}
                 onSetLoggedInMemberId={setLoggedInMemberId}
-                onBackToAdmin={() => setActiveTab('dashboard')}
+                onUnlockAdminConsole={() => {
+                  setActiveTab('dashboard');
+                  triggerToast(
+                    lang === 'gu'
+                      ? 'એડમિન કંટ્રોલ પેનલ ખુલી ગયું છે'
+                      : 'Admin Console Unlocked'
+                  );
+                }}
                 onOpenFaceScanner={(m) => setFaceScanMember(m)}
                 onOpenReceipt={(pay) => setSelectedReceipt(pay)}
                 onUpdateMember={handleSaveMemberEdit}
-                onRegisterMemberFromPortal={handleCreateAdmission}
               />
             )}
           </main>
@@ -2347,45 +2727,103 @@ export default function App() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Single-Floor Hall Address
-                  </label>
-                  <input
-                    type="text"
-                    value={adminProfile.address}
-                    onChange={(e) =>
-                      setAdminProfile({
-                        ...adminProfile,
-                        address: e.target.value,
-                      })
-                    }
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Single-Floor Hall Address
+                    </label>
+                    <input
+                      type="text"
+                      value={adminProfile.address}
+                      onChange={(e) =>
+                        setAdminProfile({
+                          ...adminProfile,
+                          address: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
+                      Admin Security PIN (Protects Admin Mode)
+                    </label>
+                    <input
+                      type="text"
+                      value={adminProfile.adminPin}
+                      onChange={(e) =>
+                        setAdminProfile({
+                          ...adminProfile,
+                          adminPin: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 font-mono bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg"
+                    />
+                  </div>
                 </div>
 
-                <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-lg flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-indigo-950 dark:text-indigo-200">
-                      Student Self-Service Login & Registration
-                    </p>
-                    <p className="text-[11px] text-indigo-700 dark:text-indigo-300">
-                      Let members log in with password to check their seat, in/out times, and wallet
-                    </p>
+                <div className="p-3.5 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-lg space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-indigo-950 dark:text-indigo-200">
+                        Member-Only Login & Registration Mode
+                      </p>
+                      <p className="text-[11px] text-indigo-700 dark:text-indigo-300">
+                        Share the link below with members or lock this screen to Student-Only Mode (Admin Sidebar & Dashboard hidden; requires PIN {adminProfile.adminPin} to unlock)
+                      </p>
+                    </div>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const studentUrl = `${PUBLIC_APP_URL}/?portal=member`;
+                        navigator.clipboard?.writeText(studentUrl);
+                        triggerToast(`Copied: ${studentUrl}`);
+                      }}
+                      className="px-3 py-1.5 font-semibold text-indigo-900 dark:text-indigo-200 bg-white dark:bg-slate-900 border border-indigo-300 dark:border-indigo-700 rounded-lg cursor-pointer"
+                    >
+                      Copy Member Link ({PUBLIC_APP_URL}/?portal=member)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAdminProfileOpen(false);
+                        setActiveTab('member-portal');
+                      }}
+                      className="px-3 py-1.5 font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg cursor-pointer"
+                    >
+                      Lock Screen to Member-Only Mode
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => {
+                      setMembers([]);
+                      setSeats([]);
+                      setLockers([]);
+                      setPayments([]);
+                      setExpenses([]);
+                      setAttendance([]);
+                      setNotices([]);
+                      setLoggedInMemberId(null);
+                      try {
+                        localStorage.removeItem(STORAGE_KEY);
+                      } catch {
+                        // ignore
+                      }
                       setIsAdminProfileOpen(false);
-                      setActiveTab('member-portal');
+                      triggerToast('All library data removed');
                     }}
-                    className="px-3 py-1.5 font-semibold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shrink-0 cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-2 font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 rounded-lg hover:bg-rose-100 cursor-pointer"
                   >
-                    Open Student Portal
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove All Data</span>
                   </button>
-                </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                   <button
                     type="button"
                     onClick={() => {
@@ -2454,7 +2892,29 @@ export default function App() {
         <FaceScannerModal
           isOpen={Boolean(faceScanMember)}
           onClose={() => setFaceScanMember(null)}
-          member={faceScanMember}
+          member={
+            faceScanMember
+              ? members.find((m) => m.id === faceScanMember.id) ||
+                faceScanMember
+              : null
+          }
+          allMembers={members}
+          onSelectMember={(m) => setFaceScanMember(m)}
+          onEnrollMemberFace={(mId, newTemplateId, photoUrl) => {
+            setMembers((prev) =>
+              prev.map((m) =>
+                m.id === mId
+                  ? {
+                      ...m,
+                      faceRegistered: true,
+                      faceTemplateId: newTemplateId,
+                      facePhotoUrl: photoUrl,
+                    }
+                  : m
+              )
+            );
+            triggerToast(`Enrolled Face Template (${newTemplateId})`);
+          }}
           activeSession={
             faceScanMember
               ? attendance.find(

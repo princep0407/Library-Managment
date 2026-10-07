@@ -87,6 +87,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
   const [lockerId, setLockerId] = useState<string>('');
   const [hourlyRate, setHourlyRate] = useState<number>(15);
   const [faceTemplateId, setFaceTemplateId] = useState<string>('');
+  const [facePhotoUrl, setFacePhotoUrl] = useState<string | undefined>(undefined);
   const [collectFeeNow, setCollectFeeNow] = useState<boolean>(true);
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('UPI');
   const [discount, setDiscount] = useState<number>(0);
@@ -155,6 +156,7 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
       lockerId: lockerId || null,
       faceRegistered: true,
       faceTemplateId: finalFaceTemplateId,
+      facePhotoUrl,
       idProof: idProof.trim() || 'Aadhaar Verified',
       address: address.trim() || 'Local Study Hostel',
     };
@@ -182,21 +184,23 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-900 dark:bg-slate-950 text-white">
-          <div className="flex items-center gap-2">
-            <UserPlus className="w-4 h-4 text-amber-400" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-auto animate-scale-in">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-indigo-50 via-white to-emerald-50/60 dark:from-slate-900 dark:to-slate-950 text-slate-900 dark:text-white">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+              <UserPlus className="w-4 h-4" />
+            </div>
             <h3 className="text-base font-bold">
               New Admission & Face Template Enrollment
             </h3>
-            <span className="text-xs font-mono tabular-nums text-amber-400 font-semibold">
+            <span className="text-xs font-mono tabular-nums text-indigo-600 dark:text-amber-400 font-semibold">
               · {nextMemberId}
             </span>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
+            className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -207,7 +211,11 @@ export const NewAdmissionModal: React.FC<NewAdmissionModalProps> = ({
           <FaceTemplateCaptureBox
             memberId={nextMemberId}
             currentTemplateId={faceTemplateId}
-            onCaptureComplete={(newTemplateId) => setFaceTemplateId(newTemplateId)}
+            currentPhotoUrl={facePhotoUrl}
+            onCaptureComplete={(newTemplateId, photoUrl) => {
+              setFaceTemplateId(newTemplateId);
+              if (photoUrl) setFacePhotoUrl(photoUrl);
+            }}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
